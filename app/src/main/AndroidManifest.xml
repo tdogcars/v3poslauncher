@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The launcher itself makes NO network calls (no downloads, no analytics, no telemetry).
+         Chrome does its own networking; the launcher needs no INTERNET permission. -->
+
+    <!-- Wi-Fi: saving the "FLO Secure" network as Device Owner. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- Re-assert Wi-Fi + display policy and auto-launch POS after reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Needed on Android 11+ to enumerate every package that resolves HOME (stock launcher
+         detection) and to show the POS icon. A launcher is the canonical legitimate holder. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="false"
+        android:theme="@style/Theme.V3PosLauncher"
+        android:usesCleartextTraffic="false">
+
+        <!-- ================= Device Owner entry points ================= -->
+
+        <!-- The admin receiver. BIND_DEVICE_ADMIN guarantees only the system can talk to it.
+             Receives DEVICE_ADMIN_ENABLED when DO is granted and PROFILE_PROVISIONING_COMPLETE
+             (all API levels) right after ManagedProvisioning finishes. -->
+        <receiver
+            android:name=".admin.PosDeviceAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+                <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Android 11+ (API 30): ManagedProvisioning asks the DPC which mode it wants
+             BEFORE provisioning. We answer "fully managed device". -->
+        <activity
+            android:name=".provisioning.GetProvisioningModeActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <intent-filter>
+                <action android:name="android.app.action.GET_PROVISIONING_MODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- The true-black provisioning status screen.
+             * API 30+: launched by the setup wizard as ADMIN_POLICY_COMPLIANCE AFTER DO is set;
+               the wizard waits for our RESULT_OK.
+             * API 26-29: launched as PROVISIONING_SUCCESSFUL after the wizard has finished.
+             * Any level: re-launched from the admin panel with ACTION_RERUN.
+             The same UID may start its own BIND_DEVICE_ADMIN-protected activity (component
+             permission checks are bypassed for the owning UID). -->
+        <activity
+            android:name=".provisioning.ProvisioningActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <intent-filter>
+                <action android:name="android.app.action.ADMIN_POLICY_COMPLIANCE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.app.action.PROVISIONING_SUCCESSFUL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- ================= Launcher (v1 UI) ================= -->
+
+        <activity
+            android:name=".home.HomeActivity"
+            android:clearTaskOnLaunch="true"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ================= Admin panel (PIN gated) ================= -->
+
+        <activity
+            android:name=".admin.PinActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
+        <activity
+            android:name=".admin.AdminPanelActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".admin.LogViewerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false" />
+
+        <!-- ================= Receivers ================= -->
+
+        <!-- Re-asserts the FLO Secure network and display policy on every boot and flags
+             the next HOME resume to auto-launch the POS. -->
+        <receiver
+            android:name=".boot.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

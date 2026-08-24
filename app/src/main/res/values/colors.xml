@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- v1 visual language: true black, nothing else. -->
+    <color name="true_black">#FF000000</color>
+    <color name="icon_bg">#FF000000</color>
+    <color name="icon_fg">#FFFFFFFF</color>
+</resources>

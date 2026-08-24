@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Device admin policy declaration.
+
+  Everything this app does is done through Device Owner privilege (granted by the
+  QR-code provisioning flow), not through legacy "device admin" policies. We
+  therefore declare an EMPTY uses-policies block on purpose:
+
+    * no force-lock / wipe-data / reset-password / password-quality policies
+    * no keyguard or lock-screen policy of any kind (the admin-panel PIN is our own
+      UI gate and is unrelated to the Android keyguard)
+
+  Declaring nothing here also keeps the "this app is a device admin" system UI
+  from listing scary capabilities we don't use.
+-->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies />
+</device-admin>

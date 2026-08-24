@@ -1,0 +1,186 @@
+name: Release APK + Provisioning QR
+
+# Builds a signed release APK, verifies the signing certificate matches the release keystore,
+# publishes the APK at a STABLE latest-release URL, and produces provisioning-qr.png as an
+# artifact. Runs on a version tag (v*) or manually.
+#
+# Required repository secrets (Settings → Secrets and variables → Actions):
+#   RELEASE_KEYSTORE_BASE64   base64 of your release.keystore (see PROVISIONING.md)
+#   RELEASE_KEYSTORE_PASSWORD keystore password
+#   RELEASE_KEY_ALIAS         key alias inside the keystore
+#   RELEASE_KEY_PASSWORD      key password
+#
+# This build installs NO other APK, so there is no POS URL/checksum to configure.
+#
+# Optional repository variables (Settings → Secrets and variables → Actions → Variables):
+#   HOME_APPS   comma-separated home app packages  (default: com.android.chrome,com.android.settings)
+#   WIFI_SSID   install-site SSID                   (default: "FLO Secure")
+#   ADMIN_PIN   4-digit PIN override                (default: none → app uses 5913)
+# Optional secret:
+#   WIFI_PASSWORD   install-site Wi-Fi password     (REQUIRED — build fails if unset)
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      home_apps:
+        description: "Home app packages, comma-separated (special cases only)"
+        required: false
+      wifi_ssid:
+        description: "Install-site SSID (special cases only)"
+        required: false
+      wifi_password:
+        description: "Install-site Wi-Fi password (special cases only)"
+        required: false
+
+permissions:
+  contents: write   # needed to create/update the GitHub Release
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Decode release keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "${RELEASE_KEYSTORE_BASE64}" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 secret is not set. See PROVISIONING.md."
+            exit 1
+          fi
+          echo "${RELEASE_KEYSTORE_BASE64}" | base64 -d > "${RUNNER_TEMP}/release.keystore"
+          echo "RELEASE_KEYSTORE_PATH=${RUNNER_TEMP}/release.keystore" >> "$GITHUB_ENV"
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NAME="${TAG#v}"
+          if [ "${TAG}" = "${GITHUB_REF_NAME}" ] && [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            NAME="0.0.0-manual-${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version_name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ env.RELEASE_KEYSTORE_PATH }}
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
+          VERSION_CODE: ${{ steps.ver.outputs.version_code }}
+          # Injected into BuildConfig.WIFI_PASSWORD_DEFAULT; never committed to source.
+          WIFI_PASSWORD: ${{ secrets.WIFI_PASSWORD }}
+        run: |
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :app:assembleRelease
+          APK="$(find app/build/outputs/apk/release -name '*.apk' | head -n1)"
+          cp "$APK" "${RUNNER_TEMP}/v3poslauncher-release.apk"
+          echo "APK_PATH=${RUNNER_TEMP}/v3poslauncher-release.apk" >> "$GITHUB_ENV"
+
+      - name: Compute signature checksum from the keystore
+        id: keycksum
+        env:
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          # Keytool needs the store password on stdin.
+          CKSUM="$(keytool -exportcert -keystore "${RELEASE_KEYSTORE_PATH}" -alias "${RELEASE_KEY_ALIAS}" \
+                    -storepass "${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" \
+                    | openssl dgst -sha256 -binary | openssl base64 | tr '+/' '-_' | tr -d '=')"
+          echo "checksum=${CKSUM}" >> "$GITHUB_OUTPUT"
+          echo "Signature checksum (from keystore): ${CKSUM}"
+
+      - name: Verify the APK is signed by that same certificate  # Acceptance criterion #7
+        env:
+          EXPECTED: ${{ steps.keycksum.outputs.checksum }}
+        run: |
+          BUILD_TOOLS="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          APKSIGNER="$BUILD_TOOLS/apksigner"
+          # apksigner prints the signer cert SHA-256 as hex; convert to base64url(no pad) to compare.
+          HEX="$("$APKSIGNER" verify --print-certs "${APK_PATH}" \
+                  | awk -F': ' '/SHA-256 digest:/ {print $2; exit}')"
+          echo "APK signer cert SHA-256 (hex): ${HEX}"
+          APK_CKSUM="$(echo "${HEX}" | xxd -r -p | openssl base64 | tr '+/' '-_' | tr -d '=')"
+          echo "APK signer checksum (base64url): ${APK_CKSUM}"
+          echo "Expected  (from keystore)      : ${EXPECTED}"
+          if [ "${APK_CKSUM}" != "${EXPECTED}" ]; then
+            echo "::error::Signed APK certificate does NOT match the release keystore. QR would be invalid."
+            exit 1
+          fi
+          echo "OK: signed APK matches the release keystore."
+
+      - name: Resolve QR inputs
+        id: qr
+        env:
+          IN_APPS: ${{ github.event.inputs.home_apps }}
+          IN_SSID: ${{ github.event.inputs.wifi_ssid }}
+          VAR_APPS: ${{ vars.HOME_APPS }}
+          VAR_SSID: ${{ vars.WIFI_SSID }}
+        run: |
+          REPO_LATEST="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"
+          APPS="${IN_APPS:-${VAR_APPS:-com.android.chrome,com.android.settings}}"
+          SSID="${IN_SSID:-${VAR_SSID:-FLO Secure}}"
+          DL_URL="${REPO_LATEST}/v3poslauncher-release.apk"
+          {
+            echo "apps=${APPS}"
+            echo "ssid=${SSID}"
+            echo "dl_url=${DL_URL}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate provisioning QR
+        env:
+          WIFI_PASSWORD: ${{ github.event.inputs.wifi_password || secrets.WIFI_PASSWORD }}
+          ADMIN_PIN: ${{ vars.ADMIN_PIN }}
+        run: |
+          pip install -r ci/requirements.txt
+          if [ -z "${WIFI_PASSWORD}" ]; then
+            echo "::error::WIFI_PASSWORD secret is not set. Add it (Settings → Secrets → Actions)."
+            exit 1
+          fi
+          WPW="${WIFI_PASSWORD}"
+          python3 ci/make_qr.py \
+            --download-url        "${{ steps.qr.outputs.dl_url }}" \
+            --signature-checksum  "${{ steps.keycksum.outputs.checksum }}" \
+            --home-apps           "${{ steps.qr.outputs.apps }}" \
+            --wifi-ssid           "${{ steps.qr.outputs.ssid }}" \
+            --wifi-password       "${WPW}" \
+            ${ADMIN_PIN:+--admin-pin "${ADMIN_PIN}"} \
+            --out provisioning-qr.png \
+            --json-out provisioning.json
+
+      - name: Upload QR + APK as build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: provisioning
+          path: |
+            provisioning-qr.png
+            provisioning.json
+            ${{ env.APK_PATH }}
+          if-no-files-found: error
+
+      - name: Publish GitHub Release (stable latest URL)
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.APK_PATH }}
+            provisioning-qr.png
+          fail_on_unmatched_files: true

@@ -1,0 +1,145 @@
+package com.flo.v3poslauncher.config
+
+import android.content.Context
+import android.content.SharedPreferences
+import com.flo.v3poslauncher.util.PinHasher
+
+/**
+ * All persisted state, in one place, on app-private SharedPreferences.
+ *
+ * Nothing here is backed up (allowBackup=false) and nothing leaves the device. Secrets are stored
+ * hashed (PIN) or as-is in private storage (Wi-Fi PSK override, only if the QR supplied one).
+ */
+class AppConfig private constructor(context: Context) {
+
+    private val prefs: SharedPreferences =
+        context.applicationContext.getSharedPreferences("v3poslauncher", Context.MODE_PRIVATE)
+
+    // ---- Home app grid -------------------------------------------------------------------
+
+    /**
+     * Ordered list of package names shown on the home screen. Editable from the admin panel.
+     * Defaults to Chrome + Settings the first time.
+     */
+    var homeApps: List<String>
+        get() {
+            val raw = prefs.getString(K_HOME_APPS, null) ?: return Constants.DEFAULT_APPS
+            return raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        }
+        set(v) = prefs.edit().putString(K_HOME_APPS, v.joinToString("\n") { it.trim() }).apply()
+
+    fun addHomeApp(pkg: String) {
+        val p = pkg.trim()
+        if (p.isEmpty()) return
+        if (homeApps.any { it.equals(p, ignoreCase = true) }) return
+        homeApps = homeApps + p
+    }
+
+    fun removeHomeApp(pkg: String) {
+        homeApps = homeApps.filterNot { it.equals(pkg.trim(), ignoreCase = true) }
+    }
+
+    var iconSizeDp: Int
+        get() = prefs.getInt(K_ICON_SIZE, Constants.DEFAULT_ICON_SIZE_DP)
+        set(v) = prefs.edit().putInt(K_ICON_SIZE, v.coerceIn(48, 512)).apply()
+
+    // ---- Wi-Fi ---------------------------------------------------------------------------
+
+    var wifiSsid: String
+        get() = prefs.getString(K_WIFI_SSID, null)?.takeIf { it.isNotBlank() } ?: Constants.WIFI_SSID
+        set(v) = prefs.edit().putString(K_WIFI_SSID, v).apply()
+
+    var wifiPassword: String
+        get() = prefs.getString(K_WIFI_PSK, null)?.takeIf { it.isNotEmpty() } ?: Constants.WIFI_PASSWORD
+        set(v) = prefs.edit().putString(K_WIFI_PSK, v).apply()
+
+    // ---- Provisioning policy switches ----------------------------------------------------
+
+    var hideStockLauncher: Boolean
+        get() = prefs.getBoolean(K_HIDE_STOCK, true)
+        set(v) = prefs.edit().putBoolean(K_HIDE_STOCK, v).apply()
+
+    /** Packages we actually hid, so revert unhides exactly those. */
+    var hiddenPackages: Set<String>
+        get() = prefs.getStringSet(K_HIDDEN_PKGS, emptySet())?.toSet() ?: emptySet()
+        set(v) = prefs.edit().putStringSet(K_HIDDEN_PKGS, v).apply()
+
+    var originalScreenOffTimeout: Int
+        get() = prefs.getInt(K_ORIG_TIMEOUT, -1)
+        set(v) = prefs.edit().putInt(K_ORIG_TIMEOUT, v).apply()
+
+    var originalStayOnWhilePluggedIn: Int
+        get() = prefs.getInt(K_ORIG_STAY_ON, -1)
+        set(v) = prefs.edit().putInt(K_ORIG_STAY_ON, v).apply()
+
+    var displayPolicyApplied: Boolean
+        get() = prefs.getBoolean(K_DISPLAY_APPLIED, false)
+        set(v) = prefs.edit().putBoolean(K_DISPLAY_APPLIED, v).apply()
+
+    var persistentHomeApplied: Boolean
+        get() = prefs.getBoolean(K_HOME_APPLIED, false)
+        set(v) = prefs.edit().putBoolean(K_HOME_APPLIED, v).apply()
+
+    // ---- Lifecycle flags -----------------------------------------------------------------
+
+    var provisioningCompleted: Boolean
+        get() = prefs.getBoolean(K_PROV_DONE, false)
+        set(v) = prefs.edit().putBoolean(K_PROV_DONE, v).apply()
+
+    var extrasSource: String
+        get() = prefs.getString(K_EXTRAS_SOURCE, "") ?: ""
+        set(v) = prefs.edit().putString(K_EXTRAS_SOURCE, v).apply()
+
+    fun setStepStatus(stepId: String, status: String) =
+        prefs.edit().putString(K_STEP_PREFIX + stepId, status).apply()
+
+    fun getStepStatus(stepId: String): String = prefs.getString(K_STEP_PREFIX + stepId, "never run") ?: "never run"
+
+    // ---- PIN -----------------------------------------------------------------------------
+
+    fun setPin(pin: String) {
+        val (salt, hash) = PinHasher.hashNew(pin)
+        prefs.edit().putString(K_PIN_SALT, salt).putString(K_PIN_HASH, hash).apply()
+    }
+
+    fun verifyPin(pin: String): Boolean {
+        val salt = prefs.getString(K_PIN_SALT, null)
+        val hash = prefs.getString(K_PIN_HASH, null)
+        if (salt == null || hash == null) {
+            return PinHasher.constantTimeEquals(pin, Constants.DEFAULT_ADMIN_PIN)
+        }
+        return PinHasher.verify(pin, salt, hash)
+    }
+
+    var pinFailedAttempts: Int
+        get() = prefs.getInt(K_PIN_FAILS, 0)
+        set(v) = prefs.edit().putInt(K_PIN_FAILS, v).apply()
+
+    var pinLockoutUntil: Long
+        get() = prefs.getLong(K_PIN_LOCK_UNTIL, 0L)
+        set(v) = prefs.edit().putLong(K_PIN_LOCK_UNTIL, v).apply()
+
+    companion object {
+        @Volatile private var instance: AppConfig? = null
+        fun get(context: Context): AppConfig =
+            instance ?: synchronized(this) { instance ?: AppConfig(context).also { instance = it } }
+
+        private const val K_HOME_APPS = "home_apps"
+        private const val K_ICON_SIZE = "icon_size_dp"
+        private const val K_WIFI_SSID = "wifi_ssid"
+        private const val K_WIFI_PSK = "wifi_psk"
+        private const val K_HIDE_STOCK = "hide_stock_launcher"
+        private const val K_HIDDEN_PKGS = "hidden_packages"
+        private const val K_ORIG_TIMEOUT = "orig_screen_off_timeout"
+        private const val K_ORIG_STAY_ON = "orig_stay_on_plugged"
+        private const val K_DISPLAY_APPLIED = "display_policy_applied"
+        private const val K_HOME_APPLIED = "persistent_home_applied"
+        private const val K_PROV_DONE = "provisioning_completed"
+        private const val K_EXTRAS_SOURCE = "extras_source"
+        private const val K_STEP_PREFIX = "step_status_"
+        private const val K_PIN_SALT = "pin_salt"
+        private const val K_PIN_HASH = "pin_hash"
+        private const val K_PIN_FAILS = "pin_failed_attempts"
+        private const val K_PIN_LOCK_UNTIL = "pin_lockout_until"
+    }
+}

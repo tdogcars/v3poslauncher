@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- targetSdk 35 enforces edge-to-edge; opt out so the status/nav bar areas stay
+         black and our simple full-screen layouts are not drawn under system bars. -->
+    <style name="Theme.V3PosLauncher" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/true_black</item>
+        <item name="android:colorBackground">@color/true_black</item>
+        <item name="android:statusBarColor">@color/true_black</item>
+        <item name="android:navigationBarColor">@color/true_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">#FFFFFFFF</item>
+        <item name="android:textColorSecondary">#FFB0B0B0</item>
+        <item name="android:colorAccent">#FF4DA3FF</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>
