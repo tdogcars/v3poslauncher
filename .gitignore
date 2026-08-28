@@ -17,3 +17,7 @@ release.keystore
 __pycache__/
 release.keystore.password.txt
 release.keystore.b64
+
+# Hosted site assets are intentionally committed so Vercel can deploy vercel-site/ from git
+!/vercel-site/*.apk
+!/vercel-site/*.png
