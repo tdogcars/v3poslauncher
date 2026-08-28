@@ -92,6 +92,12 @@ class HomeActivity : ComponentActivity() {
         if (!cfg.lockTaskEnabled) return
         val am = getSystemService(ActivityManager::class.java) ?: return
         if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) return
+        // Apply the allowlist here rather than assuming provisioning did it: startLockTask() is
+        // refused unless this package is permitted, and a partial provisioning run never set it.
+        if (!LockTaskManager.isAllowed(this)) {
+            runCatching { if (DevicePolicy(this).isDeviceOwner) LockTaskManager.apply(this) }
+                .onFailure { ProvisioningLog.w(this, "HomeActivity: lock task allowlist failed: ${it.message}") }
+        }
         if (!LockTaskManager.isAllowed(this)) return
         runCatching { startLockTask() }
             .onFailure { ProvisioningLog.w(this, "HomeActivity: startLockTask failed: ${it.message}") }

@@ -26,6 +26,17 @@ object AppLockdown {
 
     data class Outcome(val hidden: List<String>, val unhidden: List<String>, val failed: List<String>, val predictionPkg: String?)
 
+    /**
+     * Launcher / taskbar / recents packages, matched by name. The framework resource lookup in
+     * [recentsPackage] returns null on some builds (observed on an Android 15 Pixel Tablet image),
+     * and when it does, nothing stopped Quickstep from being hidden — which removes the taskbar
+     * AND the navigation buttons, and crash-loops the stock launcher. Never rely on the resource
+     * alone.
+     */
+    private val launcherNameHints = listOf(
+        "launcher", "quickstep", "trebuchet", "nexuslauncher", "com.android.systemui",
+    )
+
     /** Never hidden, whatever the allowed list says. */
     private val protectedPrefixes = listOf(
         "com.android.settings", "com.android.systemui", "com.android.provision",
@@ -62,7 +73,10 @@ object AppLockdown {
     }
 
     fun isProtected(context: Context, pkg: String, recents: String? = recentsPackage()): Boolean =
-        pkg == context.packageName || pkg == recents || protectedPrefixes.any { pkg.startsWith(it) }
+        pkg == context.packageName ||
+            pkg == recents ||
+            protectedPrefixes.any { pkg.startsWith(it) } ||
+            launcherNameHints.any { pkg.contains(it, ignoreCase = true) }
 
     /**
      * Bring the device to the desired state: hide non-allowed launchable apps (if enabled) and
@@ -108,6 +122,18 @@ object AppLockdown {
             }
         }
         cfg.hiddenOtherApps = nowHidden
+
+        // Anything the stock-launcher / taskbar step hid is restored here too when those
+        // switches are off. Without this, a device whose Quickstep was hidden by an earlier
+        // build has no taskbar and no navigation buttons, and no way to repair itself.
+        if (!cfg.hideStockLauncher && !cfg.hideTaskbar && cfg.hiddenPackages.isNotEmpty()) {
+            val stillHidden = mutableSetOf<String>()
+            for (pkg in cfg.hiddenPackages) {
+                if (setHidden(pkg, false)) { unhidden.add(pkg); log("AppLockdown: restored launcher package $pkg") }
+                else stillHidden.add(pkg)
+            }
+            cfg.hiddenPackages = stillHidden
+        }
 
         // Suggestions: hide / unhide the prediction service package.
         val predPkg = predictionServicePackage()

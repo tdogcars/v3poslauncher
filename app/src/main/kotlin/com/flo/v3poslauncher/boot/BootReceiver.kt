@@ -26,8 +26,13 @@ class BootReceiver : BroadcastReceiver() {
         // stops the stock launcher crash-looping. This must never be gated behind a flag that
         // only a full provisioning run sets.
         runCatching {
-            if (DevicePolicy(context).isDeviceOwner) AppLockdown.sync(context)
-        }.onFailure { ProvisioningLog.w(context, "BootReceiver: lockdown self-heal failed: ${it.message}") }
+            if (DevicePolicy(context).isDeviceOwner) {
+                AppLockdown.sync(context)
+                // The allowlist must be re-applied here too, not only after a full provisioning
+                // run: without it startLockTask() is refused and dedicated terminal mode is off.
+                if (cfg.lockTaskEnabled) LockTaskManager.apply(context)
+            }
+        }.onFailure { ProvisioningLog.w(context, "BootReceiver: self-heal failed: ${it.message}") }
 
         if (!cfg.provisioningCompleted) {
             ProvisioningLog.i(context, "BootReceiver: provisioning not complete; nothing to re-assert")
