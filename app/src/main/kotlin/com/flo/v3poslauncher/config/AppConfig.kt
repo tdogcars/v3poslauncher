@@ -15,6 +15,21 @@ class AppConfig private constructor(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("v3poslauncher", Context.MODE_PRIVATE)
 
+    init {
+        // One-time disarm: a device provisioned by v3.0–v3.5 may still have the retired hide
+        // switches turned on, which is what leaves it with no taskbar and no navigation buttons.
+        // Clearing them here lets the self-heal restore the launcher on the very next start.
+        if (!prefs.getBoolean(K_DISARMED_V360, false)) {
+            prefs.edit()
+                .putBoolean(K_HIDE_STOCK, false)
+                .putBoolean(K_HIDE_TASKBAR, false)
+                .putBoolean(K_LOCKDOWN_APPS, false)
+                .putBoolean(K_DISABLE_SUGGESTIONS, false)
+                .putBoolean(K_DISARMED_V360, true)
+                .apply()
+        }
+    }
+
     /** Observe changes (the Compose UI turns this into a Flow). Listener is held weakly by Android. */
     fun addChangeListener(l: SharedPreferences.OnSharedPreferenceChangeListener) =
         prefs.registerOnSharedPreferenceChangeListener(l)
@@ -73,18 +88,25 @@ class AppConfig private constructor(context: Context) {
 
     // ---- Provisioning policy switches ----------------------------------------------------
 
+    /**
+     * RETIRED in v3.6.0 — always false. Hiding the stock launcher removed the taskbar AND the
+     * navigation buttons (they are drawn by Quickstep on large screens) and crash-looped the
+     * stock launcher. Dedicated terminal mode ([lockTaskEnabled]) achieves the goal safely.
+     * The setter is kept so old call sites compile, but it cannot arm the behaviour again.
+     */
     var hideStockLauncher: Boolean
-        get() = prefs.getBoolean(K_HIDE_STOCK, false)
-        set(v) = prefs.edit().putBoolean(K_HIDE_STOCK, v).apply()
+        get() = false
+        set(_) { prefs.edit().putBoolean(K_HIDE_STOCK, false).apply() }
 
     /**
      * Also hide the framework's recents/taskbar provider (Quickstep). Removes the large-screen
      * taskbar inside other apps on Android 12L+, at the cost of the Recents button. Off by
      * default; must be proven on a disposable unit first (see PROVISIONING.md §6).
      */
+    /** RETIRED in v3.6.0 — always false. See [hideStockLauncher]. */
     var hideTaskbar: Boolean
-        get() = prefs.getBoolean(K_HIDE_TASKBAR, false)
-        set(v) = prefs.edit().putBoolean(K_HIDE_TASKBAR, v).apply()
+        get() = false
+        set(_) { prefs.edit().putBoolean(K_HIDE_TASKBAR, false).apply() }
 
     /**
      * Dedicated-terminal (lock task) mode: the supported way to suppress the large-screen taskbar
@@ -101,14 +123,16 @@ class AppConfig private constructor(context: Context) {
      * ("Pixel Launcher keeps stopping") — observed on a Pixel Tablet emulator, API 35. Use lock
      * task ([lockTaskEnabled]) instead; this switch is kept only for lab experiments.
      */
+    /** RETIRED in v3.6.0 — always false. Hiding apps crash-looped the stock launcher. */
     var lockdownApps: Boolean
-        get() = prefs.getBoolean(K_LOCKDOWN_APPS, false)
-        set(v) = prefs.edit().putBoolean(K_LOCKDOWN_APPS, v).apply()
+        get() = false
+        set(_) { prefs.edit().putBoolean(K_LOCKDOWN_APPS, false).apply() }
 
     /** DANGEROUS, default OFF — same crash risk as [lockdownApps]. */
+    /** RETIRED in v3.6.0 — always false; lock task suppresses the taskbar and its suggestions. */
     var disableAppSuggestions: Boolean
-        get() = prefs.getBoolean(K_DISABLE_SUGGESTIONS, false)
-        set(v) = prefs.edit().putBoolean(K_DISABLE_SUGGESTIONS, v).apply()
+        get() = false
+        set(_) { prefs.edit().putBoolean(K_DISABLE_SUGGESTIONS, false).apply() }
 
     /** Non-allowed apps we hid (AppLockdown), so revert unhides exactly those. */
     var hiddenOtherApps: Set<String>
@@ -190,6 +214,7 @@ class AppConfig private constructor(context: Context) {
         private const val K_WIFI_PSK = "wifi_psk"
         private const val K_HIDE_STOCK = "hide_stock_launcher"
         private const val K_HIDE_TASKBAR = "hide_taskbar"
+        private const val K_DISARMED_V360 = "disarmed_hide_switches_v360"
         private const val K_LOCK_TASK = "lock_task_enabled"
         private const val K_LOCKDOWN_APPS = "lockdown_apps"
         private const val K_DISABLE_SUGGESTIONS = "disable_app_suggestions"

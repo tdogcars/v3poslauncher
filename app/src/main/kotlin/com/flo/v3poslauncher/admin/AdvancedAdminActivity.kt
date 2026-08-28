@@ -81,60 +81,16 @@ class AdvancedAdminActivity : Activity() {
         }
         button("Re-apply allowlist now") { applyLockTask(lockTaskStatus) }
 
-        // ---- 1c. Lab-only switches ----------------------------------------------------------
-        section("Lab-only (do NOT use in a store)")
-        caption("⚠ Hiding apps while the stock launcher still has them pinned makes Quickstep " +
-            "crash-loop (\"Pixel Launcher keeps stopping\") and can leave a terminal unusable — " +
-            "observed on Android 15. Both switches below default to OFF and exist only for " +
-            "experiments on a disposable unit. Use dedicated terminal mode instead. " +
-            "Apps ${if (cfg.lockdownApps) "HIDDEN" else "all visible"}, " +
-            "suggestions ${if (cfg.disableAppSuggestions) "OFF" else "on"}, " +
-            "hidden by this: ${cfg.hiddenOtherApps.size}.")
-        val lockStatus = caption("")
-        button(if (cfg.lockdownApps) "⚠ Hiding non-allowed apps: ON — turn off (unhide all)" else "⚠ Hide non-allowed apps (unsafe)") {
-            if (cfg.lockdownApps) {
-                cfg.lockdownApps = false
-                ProvisioningLog.i(this, "Admin: lockdownApps=false")
-                applyLockdown(lockStatus)
-            } else {
-                confirm("Hide non-allowed apps?",
-                    "This has crashed the stock launcher in testing and can make a terminal unusable. " +
-                        "Only do this on a disposable unit.") {
-                    cfg.lockdownApps = true
-                    ProvisioningLog.i(this, "Admin: lockdownApps=true")
-                    applyLockdown(lockStatus)
-                }
-            }
-        }
-        button(if (cfg.disableAppSuggestions) "⚠ Taskbar suggestions: OFF — turn on" else "⚠ Disable taskbar suggestions (unsafe)") {
-            cfg.disableAppSuggestions = !cfg.disableAppSuggestions
-            ProvisioningLog.i(this, "Admin: disableAppSuggestions=${cfg.disableAppSuggestions}")
-            applyLockdown(lockStatus)
-        }
-
-        // ---- 1d. Taskbar (experimental) ----------------------------------------------------
-        section("Remove the taskbar entirely (experimental)")
-        caption("On Android 12L+ tablets/AIOs the taskbar inside other apps is drawn by the stock " +
-            "Quickstep launcher, which is also the Recents provider. Hiding it removes the taskbar " +
-            "AND makes the Recents button inert. Test on a disposable unit, then reboot it, before " +
-            "using in a store. Currently: ${if (cfg.hideTaskbar) "HIDE" else "keep"}.")
-        button(if (cfg.hideTaskbar) "Taskbar hiding is ON — turn off (and unhide)" else "Hide taskbar now (re-runs the hide step)") {
-            if (cfg.hideTaskbar) {
-                cfg.hideTaskbar = false
-                ProvisioningLog.i(this, "Admin: hideTaskbar=false")
-                val status = caption("")
-                runRevert(status) { RevertManager(this).unhideStockLauncher() }
-                build()
-            } else {
-                confirm("Hide the taskbar?",
-                    "This hides the stock Quickstep launcher package. The taskbar disappears from " +
-                        "all apps; the Recents button stops working. Reversible here or via Undo everything.") {
-                    cfg.hideTaskbar = true
-                    ProvisioningLog.i(this, "Admin: hideTaskbar=true")
-                    rerun(listOf(StepId.HIDE_STOCK))
-                }
-            }
-        }
+        // The v3.0-v3.5 "hide apps" / "hide taskbar" switches were REMOVED in v3.6.0: hiding
+        // packages the stock launcher still references crash-looped it and removed the navigation
+        // buttons. Dedicated terminal mode above does the same job the supported way. Any device
+        // that still had them on is disarmed automatically on upgrade and repairs itself on the
+        // next start.
+        section("Taskbar / app hiding")
+        caption("The old hide-apps and hide-taskbar switches were removed in v3.6.0 after they " +
+            "crash-looped the stock launcher and removed the navigation buttons on test hardware. " +
+            "Use dedicated terminal mode above. Any package an older build hid is restored " +
+            "automatically the next time this launcher starts.")
 
         // ---- 2. Wi-Fi --------------------------------------------------------------------
         section("Install-site Wi-Fi")
@@ -206,23 +162,6 @@ class AdvancedAdminActivity : Activity() {
                     status.setTextColor(Ui.OK)
                     status.text = if (cfg.lockTaskEnabled) "Allowlist applied: $detail. Press Home on the terminal to enter." else detail
                 }.onFailure { status.setTextColor(Ui.ERR); status.text = "Failed: ${it.message}" }
-                build()
-            }
-        }
-    }
-
-    private fun applyLockdown(status: TextView) {
-        status.setTextColor(Ui.ACCENT); status.text = "Applying…"
-        thread(name = "admin-lockdown") {
-            val r = runCatching { AppLockdown.sync(this) }
-            main.post {
-                r.onSuccess { o ->
-                    status.setTextColor(if (o.failed.isEmpty()) Ui.OK else Ui.WARN)
-                    status.text = "Hidden now: ${cfg.hiddenOtherApps.size}. Newly hidden ${o.hidden.size}, unhidden ${o.unhidden.size}" +
-                        (if (o.failed.isEmpty()) "." else "; could not change: ${o.failed.joinToString()}.")
-                }.onFailure {
-                    status.setTextColor(Ui.ERR); status.text = "Failed: ${it.message}"
-                }
                 build()
             }
         }
