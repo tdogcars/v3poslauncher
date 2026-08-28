@@ -228,17 +228,21 @@ replacement; the "Release Device Owner" action uses it deliberately.
 
 Real-world variations, not hypotheticals:
 
-- **The taskbar "suggested apps".** On the MicroTouch AIO (and other large-screen Android units),
-  the taskbar/hotseat with suggested apps is part of the **stock launcher** (a Launcher3/Quickstep
-  derivative). Becoming the persistent Home **and** hiding that launcher (our "Hide stock launcher /
-  taskbar" step) is what removes it. Does the QR scan bypass it on its own? **No** — QR provisioning
-  grants Device Owner and makes us Home, which stops the *stock home surface* from showing, but the
-  taskbar only disappears reliably once we hide the stock launcher package. Which package we hid is
-  written to the provisioning log (admin panel → View provisioning log); if a vendor launcher
-  survives, add its package hint. On some builds the large-screen taskbar is drawn by SystemUI
-  rather than the launcher — **verify on a real MicroTouch unit**; if a SystemUI taskbar persists,
-  it is a system component we can't hide via `setApplicationHidden`, and you'd disable it in the
-  device's own display/navigation settings.
+- **Hiding the stock launcher is OFF by default (since v3.0.2) — it hung MicroTouch units at
+  boot.** The v3.0.1 hide step hid *every* package that resolved HOME. That included
+  `com.android.settings` (its `FallbackHome` activity is what Android shows during early boot)
+  and the Quickstep launcher, which on Android 10+ is also SystemUI's recents/overview provider.
+  With those hidden, the unit provisioned fine but sat on the MicroTouch logo forever after the
+  first reboot. Recovery for an affected unit: `adb shell pm unhide com.android.settings` (and the
+  launcher package) if adb is reachable; otherwise factory-reset from recovery and re-provision.
+
+  Being the **persistent default HOME** (step 1) is what removes the stock home surface, the app
+  drawer, and — on Android 12L+ — the taskbar, which only exists while Quickstep is the default
+  launcher. If a taskbar still shows on a real unit, it is drawn by SystemUI and can't be hidden
+  via `setApplicationHidden` anyway; disable it in the device's display/navigation settings.
+  To opt back in to hiding, set the repo variable `HIDE_STOCK_LAUNCHER=true` (or the QR extra
+  `hideStockLauncher=true`). The step now hides only real launcher packages that resolve HOME and
+  never touches Settings, SystemUI, the setup wizard, or the framework's recents component.
 
 - **6-tap entry differs or is disabled.** Some modified setup wizards move or disable QR entry.
   Workarounds: look for an explicit "Set up device for work / Scan QR" option; check the vendor's
@@ -246,10 +250,9 @@ Real-world variations, not hypotheticals:
   `adb shell dpm set-device-owner com.flo.v3poslauncher/.admin.PosDeviceAdminReceiver` on a
   factory-fresh device, then open the app (it runs the same provisioning sequence).
 
-- **Quickstep / launcher package names vary.** We do **not** hardcode `com.android.launcher3`. The
-  hide step enumerates every package that resolves HOME (except us) plus known launcher hints
-  (Launcher3, Quickstep, Trebuchet, NexusLauncher, Samsung, Sunmi, Elo, MIUI, Oppo, Vivo, OnePlus).
-  What it found and hid is logged.
+- **Quickstep / launcher package names vary.** We do **not** hardcode `com.android.launcher3`. When
+  hiding is enabled, the step enumerates packages that resolve HOME (except us and the protected
+  system packages above). What it found, skipped, and hid is logged.
 
 - **Chrome may be absent.** AOSP-based POS images often ship WebView but not Chrome. The launcher
   detects this (the "Verify home apps" step warns, the tile shows "not installed") and the list is

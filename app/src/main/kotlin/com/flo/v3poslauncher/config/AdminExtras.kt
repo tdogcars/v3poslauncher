@@ -19,7 +19,7 @@ import com.flo.v3poslauncher.provisioning.ProvisioningLog
  * "android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE": {
  *   "homeApps": "com.android.chrome,com.android.settings",  // optional, comma-separated, ordered
  *   "adminPin": "4821",                                      // optional 4-digit override
- *   "hideStockLauncher": "true",                             // optional, default true
+ *   "hideStockLauncher": "false",                            // optional, default false (v3.0.2+)
  *   "wifiSsid": "FLO Secure",                                // optional
  *   "wifiPassword": "…"                                      // optional
  * }

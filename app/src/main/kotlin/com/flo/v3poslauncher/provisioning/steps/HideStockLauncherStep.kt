@@ -1,6 +1,8 @@
 package com.flo.v3poslauncher.provisioning.steps
 
+import android.content.ComponentName
 import android.content.pm.ApplicationInfo
+import android.content.res.Resources
 import com.flo.v3poslauncher.provisioning.ProvisioningStep
 import com.flo.v3poslauncher.provisioning.StepContext
 import com.flo.v3poslauncher.provisioning.StepId
@@ -8,93 +10,104 @@ import com.flo.v3poslauncher.provisioning.StepResult
 import com.flo.v3poslauncher.provisioning.guarded
 
 /**
- * Step 2 — hide the stock launcher (Quickstep/Launcher3) so no taskbar or app-drawer
- * affordance is visible, including after reboot (setApplicationHidden is persistent).
+ * Step 2 — OPTIONAL: hide the stock launcher (Launcher3/Quickstep/OEM) so its app drawer is gone.
  *
- * Detection, not hardcoding: we hide every package that resolves the HOME intent EXCEPT
- * ourselves, plus a small allowlist of known Launcher3/Quickstep/OEM variants that resolve
- * HOME. We never hide a package flagged as an unremovable critical system component beyond
- * the launcher role, and we record exactly what we hid so revert can unhide precisely those.
+ * OFF BY DEFAULT since v3.0.2. Being the persistent default HOME (step 1) is already enough to
+ * remove the taskbar and app drawer on Android 12L+ (the taskbar only exists while Quickstep is
+ * the default launcher). Hiding packages is a nice-to-have with real downsides, so it must be
+ * explicitly enabled via the QR admin extra `hideStockLauncher=true`.
  *
- * PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED=true in the QR keeps all system apps enabled at
- * provisioning time; we then selectively hide only the launcher here.
+ * Why this step was rewritten (v3.0.1 hung devices on the boot logo after a reboot):
+ *  - `com.android.settings` resolves HOME too (its FallbackHome activity is what the system
+ *    shows during early boot). Hiding it left boot with nowhere to land.
+ *  - On Android 10+ the Quickstep launcher is also SystemUI's recents/overview provider
+ *    (`config_recentsComponentName`). Hiding it can keep SystemUI from starting.
+ *
+ * Rules now:
+ *  1. Never touch a protected package: ourselves, android, Settings, SystemUI, the setup
+ *     wizard, permission controller, or the framework's recents component package.
+ *  2. Only consider packages that actually resolve HOME (no fuzzy name scans of every app).
+ *  3. Skip any package whose HOME activity is a fallback/setup activity rather than a launcher.
+ *  4. Record exactly what was hidden so revert can unhide precisely those.
  */
 class HideStockLauncherStep : ProvisioningStep {
     override val id = StepId.HIDE_STOCK
 
-    private val knownLauncherHints = listOf(
-        "launcher3", "quickstep", "trebuchet", "nexuslauncher",
-        "com.android.launcher", "com.google.android.apps.nexuslauncher",
-        "com.sec.android.app.launcher",     // Samsung
-        "com.sunmi.hpf.launcher", "com.sunmi.launcher", // Sunmi variants
-        "com.elo.launcher",                 // Elo (varies)
-        "net.oneplus.launcher", "com.miui.home", "com.oppo.launcher", "com.bbk.launcher2",
+    private val protectedPackages = setOf(
+        "android",
+        "com.android.settings",
+        "com.android.systemui",
+        "com.android.provision",
+        "com.google.android.setupwizard",
+        "com.android.permissioncontroller",
+        "com.google.android.permissioncontroller",
     )
 
     override fun run(ctx: StepContext): StepResult = guarded(ctx, "Hide stock launcher") {
         ctx.dp.requireDeviceOwner()
         if (!ctx.config.hideStockLauncher) {
-            return@guarded StepResult.Warn("Skipped: hideStockLauncher=false in configuration")
+            return@guarded StepResult.Ok("Not hiding the stock launcher (default). We are the persistent HOME, which is enough to remove the taskbar/app drawer.")
         }
 
         val self = ctx.dp.selfPackage
+        val recentsPkg = recentsProviderPackage()
+        ctx.log("HideStock: recents provider package = ${recentsPkg ?: "(unknown)"}")
+
         val candidates = LinkedHashSet<String>()
-
-        // (a) Everything that resolves HOME other than us.
+        val skipped = mutableListOf<String>()
         ctx.dp.resolveHomeActivities().forEach { ri ->
-            val pkg = ri.activityInfo?.packageName ?: return@forEach
-            if (pkg != self) candidates.add(pkg)
-        }
-
-        // (b) Known launcher packages that are installed, even if a vendor hid them from
-        //     the HOME resolver (belt and suspenders).
-        knownLauncherHints.forEach { hint ->
-            runCatching {
-                ctx.dp.pm.getInstalledApplications(0)
-                    .filter { it.packageName != self && it.packageName.contains(hint, ignoreCase = true) }
-                    .forEach { candidates.add(it.packageName) }
+            val ai = ri.activityInfo ?: return@forEach
+            val pkg = ai.packageName
+            val cls = ai.name.orEmpty()
+            when {
+                pkg == self -> Unit
+                pkg in protectedPackages -> skipped += "$pkg (protected)"
+                pkg == recentsPkg -> skipped += "$pkg (SystemUI recents provider)"
+                pkg.startsWith("com.android.settings") -> skipped += "$pkg (settings)"
+                cls.contains("FallbackHome", ignoreCase = true) ||
+                    cls.contains("SetupWizard", ignoreCase = true) ||
+                    cls.contains("Provision", ignoreCase = true) -> skipped += "$pkg ($cls is not a launcher)"
+                else -> candidates.add(pkg)
             }
         }
-
-        ctx.log("HideStock: HOME resolvers + hints => candidates: ${candidates.joinToString()}")
+        if (skipped.isNotEmpty()) ctx.log("HideStock: skipped: ${skipped.joinToString()}")
+        ctx.log("HideStock: candidates: ${candidates.joinToString().ifEmpty { "(none)" }}")
 
         if (candidates.isEmpty()) {
-            return@guarded StepResult.Warn("No other launcher found to hide (device may already be launcher-free).")
+            return@guarded StepResult.Warn("No hideable launcher package found; nothing hidden.")
         }
 
         val hidden = mutableListOf<String>()
         val failed = mutableListOf<String>()
-        val skipped = mutableListOf<String>()
-
         for (pkg in candidates) {
             val info: ApplicationInfo? = runCatching { ctx.dp.pm.getApplicationInfo(pkg, 0) }.getOrNull()
-            // Do not hide ourselves; do not hide a package that is currently the ONLY thing
-            // keeping HOME alive if hiding it would leave nothing — we are HOME now, so safe.
             ctx.progress("Hiding $pkg…")
             val ok = try {
                 ctx.dp.dpm.setApplicationHidden(ctx.dp.admin, pkg, true)
             } catch (t: Throwable) {
                 ctx.err("HideStock: exception hiding $pkg", t); false
             }
-            when {
-                ok -> { hidden.add(pkg); ctx.log("HideStock: hid $pkg (was system=${info?.let { it.flags and ApplicationInfo.FLAG_SYSTEM != 0 }})") }
-                info == null -> skipped.add(pkg)
-                else -> failed.add(pkg)
+            if (ok) {
+                hidden.add(pkg)
+                ctx.log("HideStock: hid $pkg (system=${info?.let { it.flags and ApplicationInfo.FLAG_SYSTEM != 0 }})")
+            } else {
+                failed.add(pkg)
             }
         }
 
-        // Persist exactly what we hid for precise revert (merge with any prior set).
         ctx.config.hiddenPackages = ctx.config.hiddenPackages + hidden
 
         when {
-            hidden.isNotEmpty() && failed.isEmpty() ->
-                StepResult.Ok("Hid: ${hidden.joinToString()}")
-            hidden.isNotEmpty() ->
-                StepResult.Warn("Hid: ${hidden.joinToString()}; could NOT hide: ${failed.joinToString()} (OEM may protect these — see OEM caveats).")
-            failed.isNotEmpty() ->
-                StepResult.Fail("Could not hide any launcher package: ${failed.joinToString()}. Home may still show a taskbar.")
-            else ->
-                StepResult.Warn("Nothing hidden (candidates not installable: ${skipped.joinToString()}).")
+            hidden.isNotEmpty() && failed.isEmpty() -> StepResult.Ok("Hid: ${hidden.joinToString()}")
+            hidden.isNotEmpty() -> StepResult.Warn("Hid: ${hidden.joinToString()}; could NOT hide: ${failed.joinToString()}")
+            else -> StepResult.Warn("Could not hide: ${failed.joinToString()} (OEM-protected). We remain the default HOME regardless.")
         }
     }
+
+    /** Package of the framework's recents/overview component (Quickstep on most builds). */
+    private fun recentsProviderPackage(): String? = runCatching {
+        val res = Resources.getSystem()
+        val id = res.getIdentifier("config_recentsComponentName", "string", "android")
+        if (id == 0) null else ComponentName.unflattenFromString(res.getString(id))?.packageName
+    }.getOrNull()
 }

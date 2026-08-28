@@ -56,7 +56,7 @@ class AppConfig private constructor(context: Context) {
     // ---- Provisioning policy switches ----------------------------------------------------
 
     var hideStockLauncher: Boolean
-        get() = prefs.getBoolean(K_HIDE_STOCK, true)
+        get() = prefs.getBoolean(K_HIDE_STOCK, false)
         set(v) = prefs.edit().putBoolean(K_HIDE_STOCK, v).apply()
 
     /** Packages we actually hid, so revert unhides exactly those. */

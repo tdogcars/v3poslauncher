@@ -21,7 +21,7 @@ Usage:
       [--home-apps "com.android.chrome,com.android.settings"] \
       --wifi-password       "<install-site Wi-Fi password>" \
       [--wifi-ssid "FLO Secure"] \
-      [--admin-pin 5913] \
+      [--admin-pin 5913] [--hide-stock-launcher] \
       [--out provisioning-qr.png] [--json-out provisioning.json]
 
 Only qrcode[pil] is required (pip install "qrcode[pil]").
@@ -35,7 +35,8 @@ ADMIN_COMPONENT = "com.flo.v3poslauncher/com.flo.v3poslauncher.admin.PosDeviceAd
 
 
 def build_provisioning_dict(a) -> dict:
-    admin_extras = {"hideStockLauncher": "true"}
+    # Off by default since v3.0.2: hiding launcher packages hung MicroTouch units at boot.
+    admin_extras = {"hideStockLauncher": "true" if a.hide_stock_launcher else "false"}
     if a.home_apps:
         admin_extras["homeApps"] = a.home_apps
     if a.admin_pin:
@@ -72,6 +73,8 @@ def main() -> int:
     p.add_argument("--wifi-ssid", default="FLO Secure")
     p.add_argument("--wifi-password", default="", help="install-site Wi-Fi password (required)")
     p.add_argument("--admin-pin", default="", help="optional 4-digit override of the default PIN")
+    p.add_argument("--hide-stock-launcher", action="store_true",
+                   help="ALSO hide the stock launcher package (default: off; being default HOME is enough)")
     p.add_argument("--out", default="provisioning-qr.png")
     p.add_argument("--json-out", default="provisioning.json")
     a = p.parse_args()
