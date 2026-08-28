@@ -27,6 +27,12 @@
   .num { background: var(--accent); color: #001; font-weight: 700; border-radius: 50%;
     width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: .85rem; }
   .step p { margin: 6px 0 0 36px; color: var(--dim); font-size: .92rem; line-height: 1.45; }
+  .notice { margin: 12px 0 2px 36px; padding: 10px 14px; border-radius: 10px;
+    background: rgba(255, 204, 0, .10); border: 1px solid rgba(255, 204, 0, .55);
+    color: var(--ink); font-size: .9rem; line-height: 1.45; }
+  .notice strong { color: var(--warn); }
+  @media (prefers-color-scheme: light) { .notice strong { color: #8a6d00; } }
+  @media print { .notice { background: #fff; border-color: #000; } .notice strong { color: #000; } }
   .dl { display: inline-block; margin-top: 8px; color: var(--accent); text-decoration: none; font-size: .85rem; }
   .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 24px; }
   .box h2 { font-size: 1rem; margin: 0 0 10px; }
@@ -63,6 +69,13 @@
       <h3><span class="num">1</span> Power on a factory-fresh terminal</h3>
       <p>The device must be brand-new or freshly factory-reset, with <strong>no accounts added</strong>.
          Keep it plugged in.</p>
+      <div class="notice">
+        <strong>Before you scan:</strong> the <strong>FLO&nbsp;Secure</strong> Wi-Fi network must be
+        up, in range of the terminal, and using the standard FLO password. The terminal joins it
+        automatically during setup — if it isn't there, setup stops with
+        <em>"Couldn't set up your device"</em> and you'll need to factory-reset and start over.
+        Check that a phone can join <strong>FLO Secure</strong> first.
+      </div>
     </div>
     <div class="step">
       <h3><span class="num">2</span> Tap the welcome screen 6 times</h3>
@@ -89,8 +102,9 @@
   <div class="box">
     <h2>If something goes wrong</h2>
     <ul>
-      <li><strong>"Can't set up device" / not device owner:</strong> the terminal wasn't account-free.
-          Factory-reset and scan again.</li>
+      <li><strong>"Couldn't set up your device":</strong> most often the terminal couldn't join
+          <strong>FLO Secure</strong> (network down, out of range, or wrong password), or the terminal
+          wasn't account-free. Fix the network, factory-reset, and scan again.</li>
       <li><strong>Download stalls:</strong> check the shop Wi-Fi. The setup screen shows a retry; restore
           Wi-Fi and tap Retry.</li>
       <li><strong>A taskbar or app is still installed:</strong> long-press home → PIN → View provisioning
