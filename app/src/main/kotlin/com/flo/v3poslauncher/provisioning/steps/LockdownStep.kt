@@ -17,11 +17,19 @@ class LockdownStep : ProvisioningStep {
 
     override fun run(ctx: StepContext): StepResult = guarded(ctx, "Hide non-allowed apps") {
         ctx.dp.requireDeviceOwner()
-        if (!ctx.config.lockdownApps && !ctx.config.disableAppSuggestions) {
-            return@guarded StepResult.Ok("Skipped: hideOtherApps=false and disableAppSuggestions=false.")
-        }
-        ctx.progress("Hiding apps not on the allowed list…")
+        // Always sync, even when both switches are off: that is the path that UN-hides anything a
+        // previous build hid. Skipping here would leave a device stuck in the broken state.
+        ctx.progress(
+            if (ctx.config.lockdownApps) "Hiding apps not on the allowed list…"
+            else "Restoring any apps hidden by an earlier build…",
+        )
         val o = AppLockdown.sync(ctx.context) { ctx.log(it) }
+        if (!ctx.config.lockdownApps && !ctx.config.disableAppSuggestions) {
+            return@guarded StepResult.Ok(
+                "App hiding is off (correct default). " +
+                    if (o.unhidden.isEmpty()) "Nothing was hidden." else "Restored: ${o.unhidden.joinToString()}.",
+            )
+        }
         val total = ctx.config.hiddenOtherApps.size
         val sugg = when {
             !ctx.config.disableAppSuggestions -> "suggestions left on"

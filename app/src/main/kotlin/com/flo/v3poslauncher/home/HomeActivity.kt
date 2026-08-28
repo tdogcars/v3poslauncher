@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.admin.PinActivity
@@ -54,6 +55,7 @@ class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         grantSelfLocationForSsid()
+        selfHeal()
         // Home swallows Back. Registered first so Compose BackHandlers (added later, higher
         // priority) still work — e.g. Back on the configuration screen acts as Done.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -61,6 +63,16 @@ class HomeActivity : ComponentActivity() {
         })
         openSettingsRequested.value = intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true
         setContent { LauncherApp(intentTick.intValue, openSettingsRequested.value) }
+    }
+
+    /**
+     * Repair on every launch. A freshly installed app can miss BOOT_COMPLETED (it starts in the
+     * stopped state), so boot-time repair alone is not enough: any package hidden by a switch
+     * that is now off gets un-hidden here, which is what clears a stock-launcher crash loop.
+     * Cheap and idempotent — [AppLockdown.sync] does nothing when there is nothing to change.
+     */
+    private fun selfHeal() {
+        AppLockdown.syncAsync(this)
     }
 
     override fun onResume() {

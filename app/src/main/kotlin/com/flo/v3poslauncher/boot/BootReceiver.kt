@@ -20,6 +20,15 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         val cfg = AppConfig.get(context)
+
+        // Self-heal FIRST, before the provisioningCompleted gate: if an earlier build (or a
+        // lab-only switch) hid packages and the switches are now off, un-hiding them is what
+        // stops the stock launcher crash-looping. This must never be gated behind a flag that
+        // only a full provisioning run sets.
+        runCatching {
+            if (DevicePolicy(context).isDeviceOwner) AppLockdown.sync(context)
+        }.onFailure { ProvisioningLog.w(context, "BootReceiver: lockdown self-heal failed: ${it.message}") }
+
         if (!cfg.provisioningCompleted) {
             ProvisioningLog.i(context, "BootReceiver: provisioning not complete; nothing to re-assert")
             return
