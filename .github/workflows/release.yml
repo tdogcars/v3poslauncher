@@ -134,11 +134,15 @@ jobs:
           IN_SSID: ${{ github.event.inputs.wifi_ssid }}
           VAR_APPS: ${{ vars.HOME_APPS }}
           VAR_SSID: ${{ vars.WIFI_SSID }}
+          # Where the device downloads the launcher APK from. Set the DOWNLOAD_URL repo
+          # variable to your Vercel URL (e.g. https://flo-pos-setup.vercel.app/v3poslauncher-release.apk).
+          # If unset, defaults to this repo's GitHub Release asset URL.
+          VAR_DLURL: ${{ vars.DOWNLOAD_URL }}
         run: |
           REPO_LATEST="https://github.com/${GITHUB_REPOSITORY}/releases/latest/download"
           APPS="${IN_APPS:-${VAR_APPS:-com.android.chrome,com.android.settings}}"
           SSID="${IN_SSID:-${VAR_SSID:-FLO Secure}}"
-          DL_URL="${REPO_LATEST}/v3poslauncher-release.apk"
+          DL_URL="${VAR_DLURL:-${REPO_LATEST}/v3poslauncher-release.apk}"
           {
             echo "apps=${APPS}"
             echo "ssid=${SSID}"

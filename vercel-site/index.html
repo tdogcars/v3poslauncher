@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FLO POS Terminal Setup</title>
+<style>
+  :root {
+    --bg: #0b0b0c; --card: #141416; --ink: #f2f2f3; --dim: #a1a1a6;
+    --line: #26262a; --accent: #4da3ff; --ok: #4cd964; --warn: #ffcc00;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 32px 20px 64px; }
+  header { text-align: center; margin-bottom: 8px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--dim); font-size: .9rem; margin-bottom: 28px; text-align: center; }
+  .qrcard { background: #fff; border-radius: 16px; padding: 20px; width: min(360px, 86vw);
+    margin: 0 auto 10px; text-align: center; }
+  .qrcard img { width: 100%; height: auto; display: block; image-rendering: pixelated; }
+  .qrmissing { color: #444; font-size: .85rem; padding: 40px 12px; }
+  .cardnote { text-align: center; color: var(--warn); font-size: .82rem; margin-bottom: 28px; }
+  .grid { display: grid; gap: 14px; }
+  .step { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .step h3 { margin: 0 0 4px; font-size: 1rem; display: flex; align-items: center; gap: 10px; }
+  .num { background: var(--accent); color: #001; font-weight: 700; border-radius: 50%;
+    width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: .85rem; }
+  .step p { margin: 6px 0 0 36px; color: var(--dim); font-size: .92rem; line-height: 1.45; }
+  .dl { display: inline-block; margin-top: 8px; color: var(--accent); text-decoration: none; font-size: .85rem; }
+  .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-top: 24px; }
+  .box h2 { font-size: 1rem; margin: 0 0 10px; }
+  .box ul { margin: 0; padding-left: 18px; color: var(--dim); font-size: .9rem; line-height: 1.55; }
+  code { background: #000; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: .85em; }
+  footer { color: #6b6b70; font-size: .78rem; text-align: center; margin-top: 32px; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f5f7; --card: #fff; --ink: #1c1c1e; --dim: #6b6b70; --line: #e2e2e6; }
+  }
+  @media print {
+    :root { --bg:#fff; --card:#fff; --ink:#000; --dim:#333; --line:#bbb; }
+    .box, footer { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>FLO POS Terminal Setup</h1>
+    <div class="sub">Factory-fresh terminal &middot; scan once &middot; ~2–5 minutes</div>
+  </header>
+
+  <div class="qrcard">
+    <img src="provisioning-qr.png" alt="Provisioning QR code"
+         onerror="this.style.display='none';document.getElementById('qrmiss').style.display='block';" />
+    <div id="qrmiss" class="qrmissing" style="display:none">
+      QR not uploaded yet. Add <code>provisioning-qr.png</code> to this site.
+    </div>
+  </div>
+  <div class="cardnote">Handle this page like a Wi-Fi password card — the code contains the network password.</div>
+
+  <div class="grid">
+    <div class="step">
+      <h3><span class="num">1</span> Power on a factory-fresh terminal</h3>
+      <p>The device must be brand-new or freshly factory-reset, with <strong>no accounts added</strong>.
+         Keep it plugged in.</p>
+    </div>
+    <div class="step">
+      <h3><span class="num">2</span> Tap the welcome screen 6 times</h3>
+      <p>On the very first setup-wizard screen, tap the same spot six times. A QR scanner opens.
+         (If it offers to connect Wi-Fi or fetch a scanner first, allow it.)</p>
+    </div>
+    <div class="step">
+      <h3><span class="num">3</span> Scan the code above</h3>
+      <p>The terminal joins <strong>FLO Secure</strong>, downloads and installs the launcher, and takes
+         over device management automatically. This download is the longest wait.</p>
+    </div>
+    <div class="step">
+      <h3><span class="num">4</span> Watch the black setup screen</h3>
+      <p>Five checks run on their own: default home, hide taskbar, save Wi-Fi, keep screen on, verify
+         apps. Don't power off while they run.</p>
+    </div>
+    <div class="step">
+      <h3><span class="num">5</span> Done — Chrome &amp; Settings home</h3>
+      <p>The terminal lands on the black home screen with Chrome and Settings. Long-press anywhere for
+         the PIN-protected admin panel.</p>
+    </div>
+  </div>
+
+  <div class="box">
+    <h2>If something goes wrong</h2>
+    <ul>
+      <li><strong>"Can't set up device" / not device owner:</strong> the terminal wasn't account-free.
+          Factory-reset and scan again.</li>
+      <li><strong>Download stalls:</strong> check the shop Wi-Fi. The setup screen shows a retry; restore
+          Wi-Fi and tap Retry.</li>
+      <li><strong>A taskbar or app is still installed:</strong> long-press home → PIN → View provisioning
+          log, and note what it says. See the OEM caveats in the project docs.</li>
+    </ul>
+    <p style="margin-top:10px"><a class="dl" href="/v3poslauncher-release.apk">Direct APK download</a>
+       (for adb/manual installs only — not needed for the scan flow)</p>
+  </div>
+
+  <footer>FLO internal provisioning &middot; v3poslauncher</footer>
+</div>
+</body>
+</html>
