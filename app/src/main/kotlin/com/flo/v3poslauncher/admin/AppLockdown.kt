@@ -123,14 +123,41 @@ object AppLockdown {
         }
         cfg.hiddenOtherApps = nowHidden
 
-        // Anything the stock-launcher / taskbar step hid is restored here too when those
-        // switches are off. Without this, a device whose Quickstep was hidden by an earlier
-        // build has no taskbar and no navigation buttons, and no way to repair itself.
-        if (!cfg.hideStockLauncher && !cfg.hideTaskbar && cfg.hiddenPackages.isNotEmpty()) {
+        // RECONCILE AGAINST REALITY, not against our own records. Bookkeeping can be lost (an
+        // uninstall, a wiped data dir, a build that stored it elsewhere), and a launcher package
+        // left hidden means no taskbar, no navigation buttons and a crash-looping stock launcher
+        // with nothing able to repair it. So when the hide switches are off, ask the system which
+        // launcher/HOME packages are hidden and un-hide them whether or not we think we hid them.
+        if (!cfg.hideStockLauncher && !cfg.hideTaskbar) {
+            val launcherPkgs = LinkedHashSet<String>()
+            cfg.hiddenPackages.forEach { launcherPkgs.add(it) }
+            runCatching {
+                val homeIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+                @Suppress("DEPRECATION")
+                val flags = PackageManager.MATCH_ALL or PackageManager.MATCH_UNINSTALLED_PACKAGES
+                context.packageManager.queryIntentActivities(homeIntent, flags)
+                    .mapNotNull { it.activityInfo?.packageName }
+                    .forEach { launcherPkgs.add(it) }
+            }
+            recents?.let { launcherPkgs.add(it) }
+            runCatching {
+                launchablePackages(context).filter { p ->
+                    launcherNameHints.any { p.contains(it, ignoreCase = true) }
+                }.forEach { launcherPkgs.add(it) }
+            }
+
             val stillHidden = mutableSetOf<String>()
-            for (pkg in cfg.hiddenPackages) {
-                if (setHidden(pkg, false)) { unhidden.add(pkg); log("AppLockdown: restored launcher package $pkg") }
-                else stillHidden.add(pkg)
+            for (pkg in launcherPkgs) {
+                if (pkg == context.packageName) continue
+                val isHidden = runCatching { dp.dpm.isApplicationHidden(dp.admin, pkg) }.getOrDefault(false)
+                if (!isHidden) continue
+                if (setHidden(pkg, false)) {
+                    unhidden.add(pkg)
+                    log("AppLockdown: RESTORED launcher/taskbar package $pkg (was hidden; hide switches are off)")
+                } else {
+                    stillHidden.add(pkg)
+                    log("AppLockdown: could NOT restore $pkg")
+                }
             }
             cfg.hiddenPackages = stillHidden
         }
