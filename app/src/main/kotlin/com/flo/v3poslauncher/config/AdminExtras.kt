@@ -20,6 +20,7 @@ import com.flo.v3poslauncher.provisioning.ProvisioningLog
  *   "homeApps": "com.android.chrome,com.android.settings",  // optional, comma-separated, ordered
  *   "adminPin": "4821",                                      // optional 4-digit override
  *   "hideStockLauncher": "false",                            // optional, default false (v3.0.2+)
+ *   "hideTaskbar": "false",                                  // optional, default false (v3.3+)
  *   "wifiSsid": "FLO Secure",                                // optional
  *   "wifiPassword": "…"                                      // optional
  * }
@@ -29,6 +30,7 @@ object AdminExtras {
     const val KEY_HOME_APPS = "homeApps"
     const val KEY_ADMIN_PIN = "adminPin"
     const val KEY_HIDE_STOCK_LAUNCHER = "hideStockLauncher"
+    const val KEY_HIDE_TASKBAR = "hideTaskbar"
     const val KEY_WIFI_SSID = "wifiSsid"
     const val KEY_WIFI_PASSWORD = "wifiPassword"
 
@@ -58,6 +60,10 @@ object AdminExtras {
         bundle.getString(KEY_HIDE_STOCK_LAUNCHER)?.trim()?.let {
             cfg.hideStockLauncher = it.equals("true", ignoreCase = true) || it == "1"
             applied += KEY_HIDE_STOCK_LAUNCHER
+        }
+        bundle.getString(KEY_HIDE_TASKBAR)?.trim()?.let {
+            cfg.hideTaskbar = it.equals("true", ignoreCase = true) || it == "1"
+            applied += KEY_HIDE_TASKBAR
         }
         bundle.getString(KEY_WIFI_SSID)?.trim()?.takeIf { it.isNotEmpty() }?.let {
             cfg.wifiSsid = it; applied += KEY_WIFI_SSID

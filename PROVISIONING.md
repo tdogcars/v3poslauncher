@@ -236,13 +236,15 @@ Real-world variations, not hypotheticals:
   first reboot. Recovery for an affected unit: `adb shell pm unhide com.android.settings` (and the
   launcher package) if adb is reachable; otherwise factory-reset from recovery and re-provision.
 
-  Being the **persistent default HOME** (step 1) is what removes the stock home surface, the app
-  drawer, and — on Android 12L+ — the taskbar, which only exists while Quickstep is the default
-  launcher. If a taskbar still shows on a real unit, it is drawn by SystemUI and can't be hidden
-  via `setApplicationHidden` anyway; disable it in the device's display/navigation settings.
-  To opt back in to hiding, set the repo variable `HIDE_STOCK_LAUNCHER=true` (or the QR extra
-  `hideStockLauncher=true`). The step now hides only real launcher packages that resolve HOME and
-  never touches Settings, SystemUI, the setup wizard, or the framework's recents component.
+  Being the **persistent default HOME** (step 1) removes the stock home surface and the app
+  drawer. It does **not** remove the large-screen taskbar (with "suggested apps") that Android
+  12L+ draws *inside other apps*: that is rendered by the Quickstep launcher process, which is also
+  SystemUI's Recents provider. To remove it, set `HIDE_TASKBAR=true` (repo variable) or the QR
+  extra `hideTaskbar=true`, or use "Hide taskbar now" on the Advanced screen. The trade-off is
+  fixed by Android: the Recents button becomes inert while Quickstep is hidden. Prove it on a
+  disposable unit — hide, open Chrome (no taskbar?), **reboot** (comes back?) — before any store.
+  `HIDE_STOCK_LAUNCHER=true` / `hideStockLauncher=true` additionally hides any other launcher
+  packages. Neither switch ever touches Settings, SystemUI, or the setup wizard.
 
 - **6-tap entry differs or is disabled.** Some modified setup wizards move or disable QR entry.
   Workarounds: look for an explicit "Set up device for work / Scan QR" option; check the vendor's

@@ -16,8 +16,9 @@ name: Release APK + Provisioning QR
 #   HOME_APPS   comma-separated home app packages  (default: com.android.chrome,com.android.settings)
 #   WIFI_SSID   install-site SSID                   (default: "FLO Secure")
 #   ADMIN_PIN   4-digit PIN override                (default: none → app uses 5913)
-#   HIDE_STOCK_LAUNCHER  "true" to also hide the stock launcher package (default: off — being
-#               the persistent default HOME already removes the taskbar/app drawer)
+#   HIDE_STOCK_LAUNCHER  "true" to also hide the stock launcher package (default: off)
+#   HIDE_TASKBAR  "true" to hide the Quickstep taskbar/recents provider so no taskbar shows
+#               inside other apps on large screens (Recents button becomes inert; default: off)
 # Optional secret:
 #   WIFI_PASSWORD   install-site Wi-Fi password     (REQUIRED — build fails if unset)
 
@@ -163,6 +164,7 @@ jobs:
           WIFI_PASSWORD: ${{ github.event.inputs.wifi_password || secrets.WIFI_PASSWORD }}
           ADMIN_PIN: ${{ vars.ADMIN_PIN }}
           HIDE_STOCK: ${{ vars.HIDE_STOCK_LAUNCHER }}
+          HIDE_TASKBAR: ${{ vars.HIDE_TASKBAR }}
         run: |
           pip install -r ci/requirements.txt
           if [ -z "${WIFI_PASSWORD}" ]; then
@@ -178,6 +180,7 @@ jobs:
             --wifi-password       "${WPW}" \
             ${ADMIN_PIN:+--admin-pin "${ADMIN_PIN}"} \
             $([ "${HIDE_STOCK}" = "true" ] && echo --hide-stock-launcher) \
+            $([ "${HIDE_TASKBAR}" = "true" ] && echo --hide-taskbar) \
             --out provisioning-qr.png \
             --json-out provisioning.json
 

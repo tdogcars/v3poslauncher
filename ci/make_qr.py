@@ -36,7 +36,10 @@ ADMIN_COMPONENT = "com.flo.v3poslauncher/com.flo.v3poslauncher.admin.PosDeviceAd
 
 def build_provisioning_dict(a) -> dict:
     # Off by default since v3.0.2: hiding launcher packages hung MicroTouch units at boot.
-    admin_extras = {"hideStockLauncher": "true" if a.hide_stock_launcher else "false"}
+    admin_extras = {
+        "hideStockLauncher": "true" if a.hide_stock_launcher else "false",
+        "hideTaskbar": "true" if a.hide_taskbar else "false",
+    }
     if a.home_apps:
         admin_extras["homeApps"] = a.home_apps
     if a.admin_pin:
@@ -73,6 +76,9 @@ def main() -> int:
     p.add_argument("--wifi-ssid", default="FLO Secure")
     p.add_argument("--wifi-password", default="", help="install-site Wi-Fi password (required)")
     p.add_argument("--admin-pin", default="", help="optional 4-digit override of the default PIN")
+    p.add_argument("--hide-taskbar", action="store_true",
+                   help="ALSO hide the Quickstep taskbar/recents provider (removes the large-screen "
+                        "taskbar inside apps; Recents button becomes inert). Default: off")
     p.add_argument("--hide-stock-launcher", action="store_true",
                    help="ALSO hide the stock launcher package (default: off; being default HOME is enough)")
     p.add_argument("--out", default="provisioning-qr.png")

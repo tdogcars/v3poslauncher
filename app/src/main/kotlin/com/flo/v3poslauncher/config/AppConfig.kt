@@ -77,6 +77,15 @@ class AppConfig private constructor(context: Context) {
         get() = prefs.getBoolean(K_HIDE_STOCK, false)
         set(v) = prefs.edit().putBoolean(K_HIDE_STOCK, v).apply()
 
+    /**
+     * Also hide the framework's recents/taskbar provider (Quickstep). Removes the large-screen
+     * taskbar inside other apps on Android 12L+, at the cost of the Recents button. Off by
+     * default; must be proven on a disposable unit first (see PROVISIONING.md §6).
+     */
+    var hideTaskbar: Boolean
+        get() = prefs.getBoolean(K_HIDE_TASKBAR, false)
+        set(v) = prefs.edit().putBoolean(K_HIDE_TASKBAR, v).apply()
+
     /** Packages we actually hid, so revert unhides exactly those. */
     var hiddenPackages: Set<String>
         get() = prefs.getStringSet(K_HIDDEN_PKGS, emptySet())?.toSet() ?: emptySet()
@@ -147,6 +156,7 @@ class AppConfig private constructor(context: Context) {
         private const val K_WIFI_SSID = "wifi_ssid"
         private const val K_WIFI_PSK = "wifi_psk"
         private const val K_HIDE_STOCK = "hide_stock_launcher"
+        private const val K_HIDE_TASKBAR = "hide_taskbar"
         private const val K_HIDDEN_PKGS = "hidden_packages"
         private const val K_ORIG_TIMEOUT = "orig_screen_off_timeout"
         private const val K_ORIG_STAY_ON = "orig_stay_on_plugged"

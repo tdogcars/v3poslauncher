@@ -65,6 +65,30 @@ class AdvancedAdminActivity : Activity() {
         caption("Re-run a single step:")
         StepId.values().forEach { id -> button("• ${id.title}") { rerun(listOf(id)) } }
 
+        // ---- 1b. Taskbar (experimental) ----------------------------------------------------
+        section("Large-screen taskbar (experimental)")
+        caption("On Android 12L+ tablets/AIOs the taskbar inside other apps is drawn by the stock " +
+            "Quickstep launcher, which is also the Recents provider. Hiding it removes the taskbar " +
+            "AND makes the Recents button inert. Test on a disposable unit, then reboot it, before " +
+            "using in a store. Currently: ${if (cfg.hideTaskbar) "HIDE" else "keep"}.")
+        button(if (cfg.hideTaskbar) "Taskbar hiding is ON — turn off (and unhide)" else "Hide taskbar now (re-runs the hide step)") {
+            if (cfg.hideTaskbar) {
+                cfg.hideTaskbar = false
+                ProvisioningLog.i(this, "Admin: hideTaskbar=false")
+                val status = caption("")
+                runRevert(status) { RevertManager(this).unhideStockLauncher() }
+                build()
+            } else {
+                confirm("Hide the taskbar?",
+                    "This hides the stock Quickstep launcher package. The taskbar disappears from " +
+                        "all apps; the Recents button stops working. Reversible here or via Undo everything.") {
+                    cfg.hideTaskbar = true
+                    ProvisioningLog.i(this, "Admin: hideTaskbar=true")
+                    rerun(listOf(StepId.HIDE_STOCK))
+                }
+            }
+        }
+
         // ---- 2. Wi-Fi --------------------------------------------------------------------
         section("Install-site Wi-Fi")
         caption("The network the launcher keeps saved and re-asserts at boot.")

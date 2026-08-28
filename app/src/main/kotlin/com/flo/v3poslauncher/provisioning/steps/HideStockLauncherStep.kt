@@ -12,10 +12,11 @@ import com.flo.v3poslauncher.provisioning.guarded
 /**
  * Step 2 — OPTIONAL: hide the stock launcher (Launcher3/Quickstep/OEM) so its app drawer is gone.
  *
- * OFF BY DEFAULT since v3.0.2. Being the persistent default HOME (step 1) is already enough to
- * remove the taskbar and app drawer on Android 12L+ (the taskbar only exists while Quickstep is
- * the default launcher). Hiding packages is a nice-to-have with real downsides, so it must be
- * explicitly enabled via the QR admin extra `hideStockLauncher=true`.
+ * OFF BY DEFAULT since v3.0.2. Being the persistent default HOME (step 1) removes the stock home
+ * surface and app drawer. It does NOT remove the large-screen taskbar that Quickstep draws inside
+ * OTHER apps on Android 12L+ — that needs `hideTaskbar=true`, which hides the Quickstep package
+ * (also the Recents provider, so the Recents button goes inert). Both switches are opt-in via
+ * the QR admin extras / repo variables, or the Advanced screen.
  *
  * Why this step was rewritten (v3.0.1 hung devices on the boot logo after a reboot):
  *  - `com.android.settings` resolves HOME too (its FallbackHome activity is what the system
@@ -45,13 +46,14 @@ class HideStockLauncherStep : ProvisioningStep {
 
     override fun run(ctx: StepContext): StepResult = guarded(ctx, "Hide stock launcher") {
         ctx.dp.requireDeviceOwner()
-        if (!ctx.config.hideStockLauncher) {
-            return@guarded StepResult.Ok("Not hiding the stock launcher (default). We are the persistent HOME, which is enough to remove the taskbar/app drawer.")
+        val hideTaskbar = ctx.config.hideTaskbar
+        if (!ctx.config.hideStockLauncher && !hideTaskbar) {
+            return@guarded StepResult.Ok("Not hiding the stock launcher (default). We are the persistent HOME; the stock home surface and app drawer are gone. (Large-screen taskbar inside other apps needs hideTaskbar=true.)")
         }
 
         val self = ctx.dp.selfPackage
         val recentsPkg = recentsProviderPackage()
-        ctx.log("HideStock: recents provider package = ${recentsPkg ?: "(unknown)"}")
+        ctx.log("HideStock: recents provider package = ${recentsPkg ?: "(unknown)"}; hideStockLauncher=${ctx.config.hideStockLauncher} hideTaskbar=$hideTaskbar")
 
         val candidates = LinkedHashSet<String>()
         val skipped = mutableListOf<String>()
@@ -59,10 +61,16 @@ class HideStockLauncherStep : ProvisioningStep {
             val ai = ri.activityInfo ?: return@forEach
             val pkg = ai.packageName
             val cls = ai.name.orEmpty()
+            // If the framework doesn't name its recents component, fall back to the well-known
+            // Quickstep/Launcher3 package names so hideTaskbar still finds it.
+            val isTaskbarProvider = pkg == recentsPkg || (recentsPkg == null &&
+                listOf("launcher3", "quickstep", "nexuslauncher").any { pkg.contains(it, ignoreCase = true) })
             when {
                 pkg == self -> Unit
                 pkg in protectedPackages -> skipped += "$pkg (protected)"
-                pkg == recentsPkg -> skipped += "$pkg (SystemUI recents provider)"
+                isTaskbarProvider && !hideTaskbar -> skipped += "$pkg (SystemUI recents/taskbar provider; set hideTaskbar to include)"
+                isTaskbarProvider && !ctx.config.hideStockLauncher -> candidates.add(pkg) // taskbar only
+                !ctx.config.hideStockLauncher -> skipped += "$pkg (hideStockLauncher=false)"
                 pkg.startsWith("com.android.settings") -> skipped += "$pkg (settings)"
                 cls.contains("FallbackHome", ignoreCase = true) ||
                     cls.contains("SetupWizard", ignoreCase = true) ||
@@ -97,6 +105,7 @@ class HideStockLauncherStep : ProvisioningStep {
 
         ctx.config.hiddenPackages = ctx.config.hiddenPackages + hidden
 
+        if (hideTaskbar && hidden.isNotEmpty()) ctx.log("HideStock: taskbar/recents provider hidden — the Recents button will be inert until unhidden.")
         when {
             hidden.isNotEmpty() && failed.isEmpty() -> StepResult.Ok("Hid: ${hidden.joinToString()}")
             hidden.isNotEmpty() -> StepResult.Warn("Hid: ${hidden.joinToString()}; could NOT hide: ${failed.joinToString()}")
