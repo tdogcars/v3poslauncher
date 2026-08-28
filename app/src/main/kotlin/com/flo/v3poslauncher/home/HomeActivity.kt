@@ -22,12 +22,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.admin.PinActivity
+import com.flo.v3poslauncher.ui.DefaultHomePrompt
 import com.flo.v3poslauncher.ui.HomeScreen
 import com.flo.v3poslauncher.ui.LauncherPrefs
 import com.flo.v3poslauncher.ui.SettingsScreen
+import com.flo.v3poslauncher.ui.isDefaultLauncher
 
 /**
  * The home screen — the v1 POS Launcher UI (Compose), running inside the Device-Owner app.
@@ -93,6 +96,19 @@ private fun LauncherApp(intentTick: Int, openSettingsRequested: Boolean) {
         .collectAsStateWithLifecycle(initialValue = null)
     var showSettings by remember { mutableStateOf(false) }
 
+    // Re-checked on every resume so the "make me default" prompt disappears the moment this
+    // app becomes the home app (and reappears if that is revoked). In the QR flow
+    // provisioning already made us the persistent HOME, so the prompt never shows; it matters
+    // for bench installs (adb install) where the technician sets the default by hand.
+    var defaultCheckTick by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) {
+        defaultCheckTick++
+        onPauseOrDispose { }
+    }
+    val isDefaultHome = remember(defaultCheckTick) { isDefaultLauncher(context) }
+    var promptDismissed by remember { mutableStateOf(false) }
+    var autoRequested by remember { mutableStateOf(false) }
+
     // Every re-delivered intent either opens settings (PIN passed) or lands on the icon
     // screen (HOME press) — even if the device was left sitting in configuration.
     LaunchedEffect(intentTick, openSettingsRequested) { showSettings = openSettingsRequested }
@@ -100,10 +116,20 @@ private fun LauncherApp(intentTick: Int, openSettingsRequested: Boolean) {
     MaterialTheme(colorScheme = LauncherColorScheme) {
         Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
             val loaded = config ?: return@Box
-            if (showSettings) {
-                SettingsScreen(config = loaded, onDone = { showSettings = false })
-            } else {
-                HomeScreen(
+            when {
+                showSettings -> SettingsScreen(
+                    config = loaded,
+                    onDone = { showSettings = false },
+                )
+
+                !isDefaultHome && !promptDismissed -> DefaultHomePrompt(
+                    autoRequest = !autoRequested,
+                    onAutoRequested = { autoRequested = true },
+                    onRecheck = { defaultCheckTick++ },
+                    onContinue = { promptDismissed = true },
+                )
+
+                else -> HomeScreen(
                     config = loaded,
                     onOpenSettings = {
                         context.startActivity(
