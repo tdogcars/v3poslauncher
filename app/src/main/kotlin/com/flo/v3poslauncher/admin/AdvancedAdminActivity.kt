@@ -65,28 +65,54 @@ class AdvancedAdminActivity : Activity() {
         caption("Re-run a single step:")
         StepId.values().forEach { id -> button("• ${id.title}") { rerun(listOf(id)) } }
 
-        // ---- 1b. Allowed apps ---------------------------------------------------------------
-        section("Allowed apps (taskbar contents)")
-        caption("Zero-touch, no accessibility toggle: Quickstep stays (Back / Home / Recents keep " +
-            "working) but every app that is NOT on the home-app list is hidden, and the system " +
-            "app-prediction service is hidden so the taskbar shows no suggested apps. " +
-            "Currently: apps ${if (cfg.lockdownApps) "LOCKED DOWN" else "all visible"}, " +
-            "suggestions ${if (cfg.disableAppSuggestions) "OFF" else "on"}. " +
-            "Hidden by this: ${cfg.hiddenOtherApps.size} app(s).")
-        val lockStatus = caption("")
-        button(if (cfg.lockdownApps) "Hiding non-allowed apps: ON — turn off (unhide all)" else "Hide non-allowed apps: OFF — turn on") {
-            cfg.lockdownApps = !cfg.lockdownApps
-            ProvisioningLog.i(this, "Admin: lockdownApps=${cfg.lockdownApps}")
-            applyLockdown(lockStatus)
+        // ---- 1b. Dedicated terminal mode ----------------------------------------------------
+        section("Dedicated terminal mode (taskbar)")
+        caption("Android's supported kiosk mechanism, and the reason no taskbar or suggested apps " +
+            "appear. The launcher and the home apps are allowlisted; Home and Recents stay " +
+            "enabled so staff can leave any app. Nothing is hidden or disabled, so the stock " +
+            "launcher cannot be destabilised. " +
+            "Currently: ${if (cfg.lockTaskEnabled) "ON" else "OFF"}. " +
+            "Allowlist: ${LockTaskManager.allowlist(this).joinToString()}")
+        val lockTaskStatus = caption("")
+        button(if (cfg.lockTaskEnabled) "Dedicated terminal mode is ON — turn off" else "Dedicated terminal mode is OFF — turn on") {
+            cfg.lockTaskEnabled = !cfg.lockTaskEnabled
+            ProvisioningLog.i(this, "Admin: lockTaskEnabled=${cfg.lockTaskEnabled}")
+            applyLockTask(lockTaskStatus)
         }
-        button(if (cfg.disableAppSuggestions) "Taskbar suggestions: OFF — turn on" else "Taskbar suggestions: ON — turn off") {
+        button("Re-apply allowlist now") { applyLockTask(lockTaskStatus) }
+
+        // ---- 1c. Lab-only switches ----------------------------------------------------------
+        section("Lab-only (do NOT use in a store)")
+        caption("⚠ Hiding apps while the stock launcher still has them pinned makes Quickstep " +
+            "crash-loop (\"Pixel Launcher keeps stopping\") and can leave a terminal unusable — " +
+            "observed on Android 15. Both switches below default to OFF and exist only for " +
+            "experiments on a disposable unit. Use dedicated terminal mode instead. " +
+            "Apps ${if (cfg.lockdownApps) "HIDDEN" else "all visible"}, " +
+            "suggestions ${if (cfg.disableAppSuggestions) "OFF" else "on"}, " +
+            "hidden by this: ${cfg.hiddenOtherApps.size}.")
+        val lockStatus = caption("")
+        button(if (cfg.lockdownApps) "⚠ Hiding non-allowed apps: ON — turn off (unhide all)" else "⚠ Hide non-allowed apps (unsafe)") {
+            if (cfg.lockdownApps) {
+                cfg.lockdownApps = false
+                ProvisioningLog.i(this, "Admin: lockdownApps=false")
+                applyLockdown(lockStatus)
+            } else {
+                confirm("Hide non-allowed apps?",
+                    "This has crashed the stock launcher in testing and can make a terminal unusable. " +
+                        "Only do this on a disposable unit.") {
+                    cfg.lockdownApps = true
+                    ProvisioningLog.i(this, "Admin: lockdownApps=true")
+                    applyLockdown(lockStatus)
+                }
+            }
+        }
+        button(if (cfg.disableAppSuggestions) "⚠ Taskbar suggestions: OFF — turn on" else "⚠ Disable taskbar suggestions (unsafe)") {
             cfg.disableAppSuggestions = !cfg.disableAppSuggestions
             ProvisioningLog.i(this, "Admin: disableAppSuggestions=${cfg.disableAppSuggestions}")
             applyLockdown(lockStatus)
         }
-        button("Re-apply now") { applyLockdown(lockStatus) }
 
-        // ---- 1c. Taskbar (experimental) ----------------------------------------------------
+        // ---- 1d. Taskbar (experimental) ----------------------------------------------------
         section("Remove the taskbar entirely (experimental)")
         caption("On Android 12L+ tablets/AIOs the taskbar inside other apps is drawn by the stock " +
             "Quickstep launcher, which is also the Recents provider. Hiding it removes the taskbar " +
@@ -131,7 +157,8 @@ class AdvancedAdminActivity : Activity() {
         caption("Each action is reversible. \"Undo everything\" runs them in order and finally " +
             "releases Device Owner, after which this app can be uninstalled normally — no factory reset.")
         val revertStatus = caption("")
-        button("1. Unhide stock launcher") { runRevert(revertStatus) { RevertManager(this).unhideStockLauncher() } }
+        button("1. Leave dedicated terminal mode") { runRevert(revertStatus) { RevertManager(this).clearLockTask() } }
+        button("1a. Unhide stock launcher") { runRevert(revertStatus) { RevertManager(this).unhideStockLauncher() } }
         button("1b. Unhide non-allowed apps & suggestions") { runRevert(revertStatus) { RevertManager(this).unhideOtherApps() } }
         button("2. Clear default-home lock") { runRevert(revertStatus) { RevertManager(this).clearPersistentHome() } }
         button("3. Restore screen timeout") { runRevert(revertStatus) { RevertManager(this).restoreDisplayTimeout() } }
@@ -166,6 +193,23 @@ class AdvancedAdminActivity : Activity() {
     }
 
     // ---- actions -------------------------------------------------------------------------
+
+    private fun applyLockTask(status: TextView) {
+        status.setTextColor(Ui.ACCENT); status.text = "Applying…"
+        thread(name = "admin-locktask") {
+            val r = runCatching {
+                if (cfg.lockTaskEnabled) LockTaskManager.apply(this).joinToString()
+                else LockTaskManager.clear(this).second
+            }
+            main.post {
+                r.onSuccess { detail ->
+                    status.setTextColor(Ui.OK)
+                    status.text = if (cfg.lockTaskEnabled) "Allowlist applied: $detail. Press Home on the terminal to enter." else detail
+                }.onFailure { status.setTextColor(Ui.ERR); status.text = "Failed: ${it.message}" }
+                build()
+            }
+        }
+    }
 
     private fun applyLockdown(status: TextView) {
         status.setTextColor(Ui.ACCENT); status.text = "Applying…"

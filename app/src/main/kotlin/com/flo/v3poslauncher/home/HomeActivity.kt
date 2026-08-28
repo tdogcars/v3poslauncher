@@ -1,6 +1,7 @@
 package com.flo.v3poslauncher.home
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.Intent
 import android.os.Bundle
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.flo.v3poslauncher.admin.DevicePolicy
+import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.admin.PinActivity
 import com.flo.v3poslauncher.ui.DefaultHomePrompt
 import com.flo.v3poslauncher.ui.HomeScreen
@@ -57,6 +59,28 @@ class HomeActivity : ComponentActivity() {
         })
         openSettingsRequested.value = intent?.getBooleanExtra(EXTRA_OPEN_SETTINGS, false) == true
         setContent { LauncherApp(intentTick.intValue, openSettingsRequested.value) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        enterLockTaskIfConfigured()
+    }
+
+    /**
+     * Dedicated-terminal mode. Entering lock task from the home screen is what makes Android
+     * suppress the large-screen taskbar and its suggested apps; the allowlist (launcher + home
+     * apps) and the HOME/OVERVIEW features are set by [LockTaskManager], so staff can still open
+     * the allowed apps and use Home / Recents to leave them. Nothing is hidden, so the stock
+     * launcher cannot be crashed by this.
+     */
+    private fun enterLockTaskIfConfigured() {
+        val cfg = AppConfig.get(this)
+        if (!cfg.lockTaskEnabled) return
+        val am = getSystemService(ActivityManager::class.java) ?: return
+        if (am.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE) return
+        if (!LockTaskManager.isAllowed(this)) return
+        runCatching { startLockTask() }
+            .onFailure { ProvisioningLog.w(this, "HomeActivity: startLockTask failed: ${it.message}") }
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -21,8 +21,9 @@ import com.flo.v3poslauncher.provisioning.ProvisioningLog
  *   "adminPin": "4821",                                      // optional 4-digit override
  *   "hideStockLauncher": "false",                            // optional, default false (v3.0.2+)
  *   "hideTaskbar": "false",                                  // optional, default false (v3.3+)
- *   "hideOtherApps": "true",                                 // optional, default true (v3.4+)
- *   "disableAppSuggestions": "true",                         // optional, default true (v3.4+)
+ *   "dedicatedTerminal": "true",                             // optional, default true (v3.5+)
+ *   "hideOtherApps": "false",                                // optional, default FALSE — unsafe
+ *   "disableAppSuggestions": "false",                        // optional, default FALSE — unsafe
  *   "wifiSsid": "FLO Secure",                                // optional
  *   "wifiPassword": "…"                                      // optional
  * }
@@ -33,6 +34,7 @@ object AdminExtras {
     const val KEY_ADMIN_PIN = "adminPin"
     const val KEY_HIDE_STOCK_LAUNCHER = "hideStockLauncher"
     const val KEY_HIDE_TASKBAR = "hideTaskbar"
+    const val KEY_LOCK_TASK = "dedicatedTerminal"
     const val KEY_HIDE_OTHER_APPS = "hideOtherApps"
     const val KEY_DISABLE_SUGGESTIONS = "disableAppSuggestions"
     const val KEY_WIFI_SSID = "wifiSsid"
@@ -68,6 +70,10 @@ object AdminExtras {
         bundle.getString(KEY_HIDE_TASKBAR)?.trim()?.let {
             cfg.hideTaskbar = it.equals("true", ignoreCase = true) || it == "1"
             applied += KEY_HIDE_TASKBAR
+        }
+        bundle.getString(KEY_LOCK_TASK)?.trim()?.let {
+            cfg.lockTaskEnabled = it.equals("true", ignoreCase = true) || it == "1"
+            applied += KEY_LOCK_TASK
         }
         bundle.getString(KEY_HIDE_OTHER_APPS)?.trim()?.let {
             cfg.lockdownApps = it.equals("true", ignoreCase = true) || it == "1"

@@ -9,6 +9,7 @@ import com.flo.v3poslauncher.provisioning.steps.AppsStep
 import com.flo.v3poslauncher.provisioning.steps.DisplayPolicyStep
 import com.flo.v3poslauncher.provisioning.steps.HideStockLauncherStep
 import com.flo.v3poslauncher.provisioning.steps.HomeStep
+import com.flo.v3poslauncher.provisioning.steps.LockTaskStep
 import com.flo.v3poslauncher.provisioning.steps.LockdownStep
 import com.flo.v3poslauncher.provisioning.steps.WifiStep
 import java.util.concurrent.Executors
@@ -53,7 +54,7 @@ class ProvisioningRunner(private val appContext: Context) {
     private var queue: ArrayDeque<StepId> = ArrayDeque()
 
     private val implementations: Map<StepId, ProvisioningStep> = listOf(
-        HomeStep(), HideStockLauncherStep(), WifiStep(), DisplayPolicyStep(), AppsStep(), LockdownStep(),
+        HomeStep(), HideStockLauncherStep(), WifiStep(), DisplayPolicyStep(), AppsStep(), LockTaskStep(), LockdownStep(),
     ).associateBy { it.id }
 
     fun addListener(l: Listener) = synchronized(listeners) { listeners.add(l) }

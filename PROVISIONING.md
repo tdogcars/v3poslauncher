@@ -228,27 +228,33 @@ replacement; the "Release Device Owner" action uses it deliberately.
 
 Real-world variations, not hypotheticals:
 
-- **Suggested apps in the taskbar (the usual complaint).** Being default HOME removes the stock
-  home surface and app drawer, but on Android 12L+ the taskbar still appears *inside other apps*
-  and shows pinned + predicted apps. The zero-touch fix (default ON since v3.4) is the
-  **"Hide non-allowed apps & suggestions"** step: as Device Owner the launcher hides every
-  launchable app that is not on the home-app list, and hides the system app-prediction service
-  (Android System Intelligence on GMS builds) so there are no predictions to show. Quickstep is
-  left alone, so **Back / Home / Recents keep working normally** — which matters, because staff
-  need Home to leave an app. Protected packages (Settings, SystemUI, Play services, the keyboard,
-  the setup wizard, the installer, telephony) are never hidden. A pinned icon baked into an OEM
-  hotseat layout can survive this; it cannot be removed programmatically, since pins live in the
-  launcher's private data.
+- **Suggested apps in the taskbar — use dedicated terminal mode.** Being default HOME removes the
+  stock home surface and app drawer, but on Android 12L+ a taskbar still appears *inside other
+  apps*, showing pinned and predicted apps. The supported fix, and the default since v3.5, is
+  **lock task ("dedicated terminal") mode**: the launcher allowlists itself plus the configured
+  home apps and enables `LOCK_TASK_FEATURE_HOME`, `OVERVIEW`, `GLOBAL_ACTIONS`, `NOTIFICATIONS`,
+  `SYSTEM_INFO` and `KEYGUARD`. Android then suppresses the taskbar and its suggestions itself,
+  while Home and Recents keep working so staff can leave any app, and the status bar and power
+  button behave normally. Users can move freely between the allowlisted apps and nothing else.
+  Nothing is hidden or disabled, so the stock launcher cannot be destabilised.
 
-  Turn it off with `hideOtherApps=false` / `disableAppSuggestions=false` (QR extras), the
-  `NO_HIDE_OTHER_APPS` / `ALLOW_APP_SUGGESTIONS` repo variables, or the Advanced screen. Editing
-  the app list in Launcher configuration re-syncs immediately (newly allowed apps are unhidden),
-  and boot re-asserts it. Revert: "Unhide non-allowed apps & suggestions", also part of
-  Undo everything.
+  Turn it off with `dedicatedTerminal=false` (QR extra), the `NO_DEDICATED_TERMINAL` repo
+  variable, or the Advanced screen. Editing the app list in Launcher configuration re-applies the
+  allowlist immediately, and boot re-asserts it. Revert: "Leave dedicated terminal mode", also
+  part of Undo everything.
 
-  There is no way for a Device Owner to enable an accessibility service or an overlay
+- **DO NOT hide apps to clean up the taskbar.** `setApplicationHidden` on an app that the stock
+  launcher still has pinned makes Quickstep throw when it loads its hotseat — observed on an
+  Android 15 Pixel Tablet as a *"Pixel Launcher keeps stopping"* crash loop that made the device
+  unusable (long-pressing a taskbar icon triggered it, but it can fire unprompted). The
+  `hideOtherApps` / `disableAppSuggestions` switches therefore default to **off** and are marked
+  lab-only in the admin panel. Recovery, if one is ever turned on and a device crash-loops:
+  `adb shell pm list packages -d` then `adb shell pm unhide <pkg>` for each, or "Unhide
+  non-allowed apps" from the admin panel.
+
+  There is also no way for a Device Owner to enable an accessibility service or a screen overlay
   automatically, so a custom Back/Home bar of our own would need a manual toggle in Settings on
-  every device — which is why this route was chosen instead.
+  every device — which is why lock task, not a drawn bar, is the answer here.
 
 - **Hiding the stock launcher is OFF by default (since v3.0.2) — it hung MicroTouch units at
   boot.** The v3.0.1 hide step hid *every* package that resolved HOME. That included

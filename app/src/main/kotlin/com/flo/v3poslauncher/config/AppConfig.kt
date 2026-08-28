@@ -87,16 +87,27 @@ class AppConfig private constructor(context: Context) {
         set(v) = prefs.edit().putBoolean(K_HIDE_TASKBAR, v).apply()
 
     /**
-     * Zero-touch taskbar answer: hide every launchable app that is not on the home-app list, and
-     * hide the system app-prediction service so the taskbar shows no "suggested apps". Quickstep
-     * itself stays, so Back / Home / Recents keep working. Both default ON.
+     * Dedicated-terminal (lock task) mode: the supported way to suppress the large-screen taskbar
+     * and its suggested apps. The launcher plus the configured home apps are allowlisted, and the
+     * Home / Recents features stay enabled so staff can leave any app. Default ON.
+     */
+    var lockTaskEnabled: Boolean
+        get() = prefs.getBoolean(K_LOCK_TASK, true)
+        set(v) = prefs.edit().putBoolean(K_LOCK_TASK, v).apply()
+
+    /**
+     * DANGEROUS, default OFF. Hides every launchable app that is not on the home-app list.
+     * Hiding an app that the stock launcher still has pinned makes Quickstep crash-loop
+     * ("Pixel Launcher keeps stopping") — observed on a Pixel Tablet emulator, API 35. Use lock
+     * task ([lockTaskEnabled]) instead; this switch is kept only for lab experiments.
      */
     var lockdownApps: Boolean
-        get() = prefs.getBoolean(K_LOCKDOWN_APPS, true)
+        get() = prefs.getBoolean(K_LOCKDOWN_APPS, false)
         set(v) = prefs.edit().putBoolean(K_LOCKDOWN_APPS, v).apply()
 
+    /** DANGEROUS, default OFF — same crash risk as [lockdownApps]. */
     var disableAppSuggestions: Boolean
-        get() = prefs.getBoolean(K_DISABLE_SUGGESTIONS, true)
+        get() = prefs.getBoolean(K_DISABLE_SUGGESTIONS, false)
         set(v) = prefs.edit().putBoolean(K_DISABLE_SUGGESTIONS, v).apply()
 
     /** Non-allowed apps we hid (AppLockdown), so revert unhides exactly those. */
@@ -179,6 +190,7 @@ class AppConfig private constructor(context: Context) {
         private const val K_WIFI_PSK = "wifi_psk"
         private const val K_HIDE_STOCK = "hide_stock_launcher"
         private const val K_HIDE_TASKBAR = "hide_taskbar"
+        private const val K_LOCK_TASK = "lock_task_enabled"
         private const val K_LOCKDOWN_APPS = "lockdown_apps"
         private const val K_DISABLE_SUGGESTIONS = "disable_app_suggestions"
         private const val K_HIDDEN_OTHER = "hidden_other_apps"

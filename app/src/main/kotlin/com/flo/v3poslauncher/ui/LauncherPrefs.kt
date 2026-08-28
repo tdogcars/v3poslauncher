@@ -3,6 +3,7 @@ package com.flo.v3poslauncher.ui
 import android.content.Context
 import android.content.SharedPreferences
 import com.flo.v3poslauncher.admin.AppLockdown
+import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.config.AppConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -41,6 +42,9 @@ object LauncherPrefs {
 
     fun setPosPackages(context: Context, packages: List<String>) {
         AppConfig.get(context).homeApps = packages
+        // The lock task allowlist must include every app on the home screen, or tapping a tile
+        // would be blocked while in dedicated-terminal mode.
+        runCatching { if (AppConfig.get(context).lockTaskEnabled) LockTaskManager.apply(context) }
         // Newly allowed apps must be unhidden (and newly removed ones hidden) right away.
         AppLockdown.syncAsync(context)
     }

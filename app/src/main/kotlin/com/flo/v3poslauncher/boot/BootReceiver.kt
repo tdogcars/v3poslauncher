@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
+import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.provisioning.ProvisioningLog
 import com.flo.v3poslauncher.wifi.WifiProvisioner
@@ -32,6 +33,10 @@ class BootReceiver : BroadcastReceiver() {
                 if (dp.isDeviceOwner) {
                     val w = WifiProvisioner(context).ensureNetwork(cfg.wifiSsid, cfg.wifiPassword)
                     ProvisioningLog.i(context, "BootReceiver: wifi -> ${w.message}")
+                    if (cfg.lockTaskEnabled) {
+                        runCatching { LockTaskManager.apply(context) }
+                            .onFailure { ProvisioningLog.w(context, "BootReceiver: lock task re-apply failed: ${it.message}") }
+                    }
                     runCatching { AppLockdown.sync(context) }
                         .onFailure { ProvisioningLog.w(context, "BootReceiver: app lockdown re-sync failed: ${it.message}") }
                     if (cfg.displayPolicyApplied) {

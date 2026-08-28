@@ -4,6 +4,7 @@ import android.content.Context
 import android.provider.Settings
 import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
+import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.wifi.WifiProvisioner
 
@@ -36,6 +37,11 @@ class RevertManager(context: Context) {
         cfg.hiddenPackages = failed.toSet() // keep only the ones still hidden
         if (failed.isEmpty()) true to "Unhid: ${restored.joinToString()}"
         else false to "Unhid ${restored.joinToString()}; FAILED: ${failed.joinToString()}"
+    }
+
+    /** 1a. Leave dedicated-terminal mode and clear the lock task allowlist. */
+    fun clearLockTask(): StepOutcome = wrap("Clear dedicated terminal mode") {
+        LockTaskManager.clear(appContext)
     }
 
     /** 1b. Un-hide the non-allowed apps and the app-prediction service (AppLockdown). */
@@ -83,6 +89,7 @@ class RevertManager(context: Context) {
         val results = mutableListOf<StepOutcome>()
         fun step(o: StepOutcome) { results.add(o); progress(o); ProvisioningLog.i(appContext, "Revert: ${o.name}: ${if (o.ok) "OK" else "FAIL"} — ${o.detail}") }
 
+        step(clearLockTask())
         step(unhideStockLauncher())
         step(unhideOtherApps())
         step(clearPersistentHome())

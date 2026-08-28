@@ -39,9 +39,11 @@ def build_provisioning_dict(a) -> dict:
     admin_extras = {
         "hideStockLauncher": "true" if a.hide_stock_launcher else "false",
         "hideTaskbar": "true" if a.hide_taskbar else "false",
-        # Default ON: hide every app not on the home list, and the taskbar's suggestion service.
-        "hideOtherApps": "false" if a.no_hide_other_apps else "true",
-        "disableAppSuggestions": "false" if a.allow_app_suggestions else "true",
+        # Dedicated-terminal (lock task) mode is what suppresses the taskbar. Default ON.
+        "dedicatedTerminal": "false" if a.no_dedicated_terminal else "true",
+        # App hiding is UNSAFE (crashes the stock launcher) — default OFF, lab use only.
+        "hideOtherApps": "true" if a.hide_other_apps else "false",
+        "disableAppSuggestions": "true" if a.disable_app_suggestions else "false",
     }
     if a.home_apps:
         admin_extras["homeApps"] = a.home_apps
@@ -79,10 +81,13 @@ def main() -> int:
     p.add_argument("--wifi-ssid", default="FLO Secure")
     p.add_argument("--wifi-password", default="", help="install-site Wi-Fi password (required)")
     p.add_argument("--admin-pin", default="", help="optional 4-digit override of the default PIN")
-    p.add_argument("--no-hide-other-apps", action="store_true",
-                   help="do NOT hide apps that are absent from the home list (default: hide them)")
-    p.add_argument("--allow-app-suggestions", action="store_true",
-                   help="leave the taskbar's suggested-apps service enabled (default: disabled)")
+    p.add_argument("--no-dedicated-terminal", action="store_true",
+                   help="do NOT put the device in lock task (dedicated terminal) mode; the stock "
+                        "taskbar with suggested apps then stays visible. Default: enabled")
+    p.add_argument("--hide-other-apps", action="store_true",
+                   help="LAB ONLY, unsafe: hide apps absent from the home list (crashes Quickstep)")
+    p.add_argument("--disable-app-suggestions", action="store_true",
+                   help="LAB ONLY, unsafe: hide the app-prediction service")
     p.add_argument("--hide-taskbar", action="store_true",
                    help="ALSO hide the Quickstep taskbar/recents provider (removes the large-screen "
                         "taskbar inside apps; Recents button becomes inert). Default: off")

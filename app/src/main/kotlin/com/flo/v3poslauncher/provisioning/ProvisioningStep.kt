@@ -11,7 +11,8 @@ enum class StepId(val title: String) {
     WIFI("Save FLO Secure Wi-Fi"),
     DISPLAY("Apply display policy"),
     APPS("Verify home apps"),
-    LOCKDOWN("Hide non-allowed apps & suggestions");
+    LOCK_TASK("Dedicated terminal mode"),
+    LOCKDOWN("Hide non-allowed apps (lab only)");
 }
 
 /** Outcome of one step. WARN continues the sequence; FAIL pauses it for Retry / Skip. */
