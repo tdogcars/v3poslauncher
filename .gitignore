@@ -15,3 +15,5 @@
 release.keystore
 /ci/out/
 __pycache__/
+release.keystore.password.txt
+release.keystore.b64
