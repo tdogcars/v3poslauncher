@@ -39,6 +39,17 @@ class AppConfig private constructor(context: Context) {
         homeApps = homeApps.filterNot { it.equals(pkg.trim(), ignoreCase = true) }
     }
 
+    /** Move an app up (delta = -1) or down (delta = +1) in the home order. No-op at the ends. */
+    fun moveHomeApp(pkg: String, delta: Int) {
+        val list = homeApps.toMutableList()
+        val i = list.indexOfFirst { it.equals(pkg.trim(), ignoreCase = true) }
+        if (i < 0) return
+        val j = i + delta
+        if (j < 0 || j >= list.size) return
+        val tmp = list[i]; list[i] = list[j]; list[j] = tmp
+        homeApps = list
+    }
+
     var iconSizeDp: Int
         get() = prefs.getInt(K_ICON_SIZE, Constants.DEFAULT_ICON_SIZE_DP)
         set(v) = prefs.edit().putInt(K_ICON_SIZE, v.coerceIn(48, 512)).apply()

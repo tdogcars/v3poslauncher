@@ -1,7 +1,12 @@
 package com.flo.v3poslauncher.home
 
+import android.Manifest
 import android.app.Activity
+import android.app.admin.DevicePolicyManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
@@ -9,55 +14,185 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.admin.PinActivity
 import com.flo.v3poslauncher.config.AppConfig
+import com.flo.v3poslauncher.util.Ui
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * The home screen: true-black background showing a small centered grid of the configured apps
- * (by default Chrome and Settings). Tap a tile to open the app; long-press anywhere (or on a
- * tile) to open the PIN-gated admin panel.
+ * The home screen (v1 visual language): true-black background, a centered row of the configured
+ * apps, a Wi-Fi status + "Run speed test" control top-left, and the clock/date top-right.
+ * Tap a tile to open the app; long-press anywhere for the PIN-gated Launcher configuration.
  *
- * No app is auto-launched — boot lands here on the grid (per requirement). No stock taskbar or
- * app drawer is shown because provisioning made us the persistent Home and hid the stock
- * launcher. Missing apps (e.g. Chrome absent on an AOSP image) render as a disabled tile.
+ * No app is auto-launched — boot lands here on the grid.
  */
 class HomeActivity : Activity() {
 
     private lateinit var cfg: AppConfig
-    private lateinit var root: LinearLayout
+    private lateinit var root: FrameLayout
+    private lateinit var grid: LinearLayout
+    private lateinit var clock: TextView
+    private lateinit var date: TextView
+    private lateinit var netDot: View
+    private lateinit var netLabel: TextView
+    private lateinit var speedResult: TextView
+
+    private var network: NetworkStatus? = null
+    private val timeFmt = SimpleDateFormat("h:mm a", Locale.US)
+    private val dateFmt = SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.US)
+    private val tick = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = updateClock()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         cfg = AppConfig.get(this)
-        root = LinearLayout(this).apply {
+        grantSelfLocationForSsid()
+
+        root = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        }
+        grid = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.BLACK)
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
         }
+        root.addView(grid)
+        root.addView(buildTopLeft())
+        root.addView(buildTopRight())
         setContentView(root)
         root.setOnLongClickListener { openAdmin(); true }
+        grid.setOnLongClickListener { openAdmin(); true }
     }
 
     override fun onResume() {
         super.onResume()
         applyImmersive()
         renderGrid()
+        updateClock()
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK); addAction(Intent.ACTION_TIME_CHANGED); addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(tick, filter, Context.RECEIVER_NOT_EXPORTED)
+        else registerReceiver(tick, filter)
+        network = NetworkStatus(this) { s -> renderNetwork(s) }.also { it.start() }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        runCatching { unregisterReceiver(tick) }
+        network?.stop(); network = null
     }
 
     /** Home swallows Back. */
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() { /* no-op */ }
 
+    // ---- top-left: network + speed test -------------------------------------------------
+
+    private fun buildTopLeft(): View {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.START).apply {
+                leftMargin = dp(24); topMargin = dp(22)
+            }
+        }
+        val status = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        }
+        netDot = View(this).apply {
+            background = Ui.circle(Ui.ERR, this@HomeActivity, 9)
+            layoutParams = LinearLayout.LayoutParams(dp(9), dp(9)).apply { rightMargin = dp(10) }
+        }
+        netLabel = TextView(this).apply {
+            text = "Not connected"; setTextColor(Color.WHITE); textSize = 14f
+        }
+        status.addView(netDot); status.addView(netLabel)
+        box.addView(status)
+
+        val btn = Ui.outlinedButton(this, "Run speed test") { runSpeedTest() }
+        (btn.layoutParams as LinearLayout.LayoutParams).topMargin = dp(12)
+        box.addView(btn)
+
+        speedResult = TextView(this).apply {
+            text = ""; setTextColor(Ui.TEXT_DIM); textSize = 12f
+            setPadding(dp(4), dp(8), 0, 0)
+            visibility = View.GONE
+        }
+        box.addView(speedResult)
+        return box
+    }
+
+    private fun renderNetwork(s: NetworkStatus.State) {
+        val color = when {
+            s.connected && s.internet -> Ui.OK
+            s.connected -> Ui.WARN
+            else -> Ui.ERR
+        }
+        netDot.background = Ui.circle(color, this, 9)
+        netLabel.text = when {
+            !s.connected -> "Not connected"
+            s.ssid != null -> s.ssid
+            else -> "Wi-Fi"
+        }
+    }
+
+    private fun runSpeedTest() {
+        if (SpeedTest.isRunning) return
+        speedResult.visibility = View.VISIBLE
+        speedResult.setTextColor(Ui.TEXT_DIM)
+        speedResult.text = "Starting…"
+        SpeedTest.run(
+            onProgress = { speedResult.text = it },
+            onDone = { r ->
+                speedResult.text = r.summary()
+                speedResult.setTextColor(if (r.ok) Ui.OK else Ui.ERR)
+            },
+        )
+    }
+
+    // ---- top-right: clock + date ---------------------------------------------------------
+
+    private fun buildTopRight(): View {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.END
+            layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                rightMargin = dp(24); topMargin = dp(18)
+            }
+        }
+        clock = TextView(this).apply {
+            setTextColor(Color.WHITE); textSize = 30f; setTypeface(Typeface.DEFAULT_BOLD); gravity = Gravity.END
+        }
+        date = TextView(this).apply {
+            setTextColor(Ui.TEXT_DIM); textSize = 14f; gravity = Gravity.END
+        }
+        box.addView(clock); box.addView(date)
+        return box
+    }
+
+    private fun updateClock() {
+        val now = Date()
+        clock.text = timeFmt.format(now)
+        date.text = dateFmt.format(now)
+    }
+
+    // ---- center: app grid ----------------------------------------------------------------
+
     private fun renderGrid() {
-        root.removeAllViews()
+        grid.removeAllViews()
         val apps = cfg.homeApps
         val iconPx = (cfg.iconSizeDp * resources.displayMetrics.density).toInt()
 
-        // A single centered row of tiles; wraps to the width for 1–4 apps which is the norm.
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -65,18 +200,12 @@ class HomeActivity : Activity() {
         if (apps.isEmpty()) {
             row.addView(TextView(this).apply {
                 text = "No apps configured.\nLong-press for settings."
-                setTextColor(Color.parseColor("#9A9A9A")); gravity = Gravity.CENTER
+                setTextColor(Ui.TEXT_FAINT); gravity = Gravity.CENTER
             })
         } else {
             apps.forEach { pkg -> row.addView(tileFor(pkg, iconPx)) }
         }
-        root.addView(row)
-
-        root.addView(TextView(this).apply {
-            text = "Long-press anywhere for settings"
-            setTextColor(Color.parseColor("#5A5A5A")); textSize = 11f
-            gravity = Gravity.CENTER; setPadding(0, dp(28), 0, 0)
-        })
+        grid.addView(row)
     }
 
     private fun tileFor(pkg: String, iconPx: Int): View {
@@ -96,9 +225,9 @@ class HomeActivity : Activity() {
         }
         val label = TextView(this).apply {
             text = if (entry.installed) entry.label else "${entry.label}\n(not installed)"
-            setTextColor(if (entry.installed) Color.WHITE else Color.parseColor("#8A8A8A"))
-            textSize = 14f; gravity = Gravity.CENTER
-            setPadding(0, dp(10), 0, 0)
+            setTextColor(if (entry.installed) Color.WHITE else Ui.TEXT_FAINT)
+            textSize = 16f; gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, 0)
         }
         tile.addView(icon); tile.addView(label)
         tile.setOnClickListener {
@@ -112,11 +241,27 @@ class HomeActivity : Activity() {
         return tile
     }
 
+    // ---- misc -----------------------------------------------------------------------------
+
     private fun openAdmin() {
         startActivity(Intent(this, PinActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
+    /** Reading the connected SSID on Android 10+ needs fine location; a Device Owner may grant it to itself. */
+    private fun grantSelfLocationForSsid() {
+        runCatching {
+            val dp = DevicePolicy(this)
+            if (dp.isDeviceOwner) {
+                dp.dpm.setPermissionGrantState(
+                    dp.admin, packageName, Manifest.permission.ACCESS_FINE_LOCATION,
+                    DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED,
+                )
+            }
+        }
+    }
+
     private fun applyImmersive() {
+        @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
                 View.SYSTEM_UI_FLAG_FULLSCREEN or
@@ -126,5 +271,5 @@ class HomeActivity : Activity() {
     }
 
     private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun dp(v: Int): Int = Ui.dp(this, v)
 }

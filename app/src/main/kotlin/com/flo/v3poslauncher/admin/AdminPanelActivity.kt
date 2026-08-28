@@ -1,211 +1,267 @@
 package com.flo.v3poslauncher.admin
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.text.InputType
+import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.widget.Button
-import android.widget.EditText
+import android.widget.CheckBox
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
-import android.widget.Toast
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.home.AppLauncher
 import com.flo.v3poslauncher.provisioning.ProvisioningLog
-import com.flo.v3poslauncher.provisioning.RevertManager
-import com.flo.v3poslauncher.provisioning.StepId
-import kotlin.concurrent.thread
+import com.flo.v3poslauncher.util.Ui
 
 /**
- * PIN-gated admin panel. Reachable only through [PinActivity]. Sections:
- *   1. Home apps — add/remove the apps shown on the launcher, set icon size.
- *   2. Provisioning — status summary, log viewer, re-run any step.
- *   3. Revert — each rollback step individually, and "Undo everything".
- *   4. Security — change PIN.
+ * "Launcher configuration" — the PIN-gated settings screen, styled after the v1 launcher:
  *
- * Not exported; assumes the caller already passed the PIN.
+ *   Launcher configuration                                  Done
+ *   N selected
+ *   Icon size   [========o------]  125 dp
+ *   Shown on home screen (in order)
+ *     [icon] Label / package            ^  v  [x]
+ *   Available apps
+ *     [icon] Label / package                  [ ]
+ *   Advanced device management…
+ *
+ * Every change is saved immediately. Provisioning / revert / PIN tools live in
+ * [AdvancedAdminActivity]. Not exported; assumes the caller already passed the PIN.
  */
 class AdminPanelActivity : Activity() {
 
     private lateinit var cfg: AppConfig
-    private val main = Handler(Looper.getMainLooper())
     private lateinit var container: LinearLayout
+    private lateinit var selectedCount: TextView
+    private lateinit var shownList: LinearLayout
+    private lateinit var availableList: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         cfg = AppConfig.get(this)
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.BLACK) }
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(Ui.PANEL_BG)
+            isFillViewport = true
+        }
         container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            val p = dp(20); setPadding(p, dp(28), p, dp(40))
+            val p = dp(24); setPadding(p, dp(16), p, dp(40))
         }
         scroll.addView(container)
         setContentView(scroll)
         build()
     }
 
+    override fun onResume() {
+        super.onResume()
+        refreshLists()
+    }
+
+    // ---- layout ---------------------------------------------------------------------------
+
     private fun build() {
         container.removeAllViews()
-        title("FLO POS Launcher — Admin")
-        caption(DevicePolicy(this).describe())
 
-        // ---- 1. Home apps ----------------------------------------------------------------
-        section("Home apps")
-        caption("Apps shown on the launcher, in order. No apps are installed by the launcher — " +
-            "these must already be on the device.")
-        cfg.homeApps.forEach { pkg ->
-            val entry = AppLauncher.resolve(this, pkg)
-            appRow(pkg, entry.label, entry.installed)
+        // Header: title + "N selected" on the left, Done on the right.
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
         }
-        val addField = field("Add app by package name", "", hint = "e.g. com.android.chrome")
-        val addRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        addRow.addView(Button(this).apply {
-            text = "Add"
+        val titles = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-            setOnClickListener {
-                val p = addField.text.toString().trim()
-                if (p.isEmpty()) { toast("Enter a package name"); return@setOnClickListener }
-                cfg.addHomeApp(p); ProvisioningLog.i(this@AdminPanelActivity, "Admin: added home app $p"); build()
-            }
+        }
+        titles.addView(TextView(this).apply {
+            text = "Launcher configuration"; setTextColor(Ui.TEXT); textSize = 22f; setTypeface(Typeface.DEFAULT_BOLD)
         })
-        addRow.addView(Button(this).apply {
-            text = "Pick installed…"
+        selectedCount = TextView(this).apply { setTextColor(Ui.TEXT_DIM); textSize = 13f }
+        titles.addView(selectedCount)
+        header.addView(titles)
+        header.addView(Ui.textButton(this, "Done") { done() })
+        container.addView(header)
+
+        // Icon size slider.
+        sectionLabel("Icon size", topDp = 26)
+        val sliderRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+        }
+        val valueLabel = TextView(this).apply {
+            setTextColor(Ui.TEXT); textSize = 15f; setPadding(dp(16), 0, 0, 0)
+            text = "${cfg.iconSizeDp} dp"
+        }
+        val slider = SeekBar(this).apply {
+            max = ICON_MAX - ICON_MIN
+            progress = (cfg.iconSizeDp - ICON_MIN).coerceIn(0, max)
             layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-            setOnClickListener { showAppPicker() }
-        })
-        container.addView(addRow)
-
-        val iconField = field("Home icon size (dp)", cfg.iconSizeDp.toString(), numeric = true)
-        button("Save icon size") {
-            iconField.text.toString().toIntOrNull()?.let { cfg.iconSizeDp = it; toast("Saved (${cfg.iconSizeDp}dp)") }
-                ?: toast("Enter a number")
-        }
-
-        // ---- 2. Provisioning -------------------------------------------------------------
-        section("Provisioning")
-        caption(stepSummary())
-        button("View provisioning log") { startActivity(Intent(this, LogViewerActivity::class.java)) }
-        button("Re-run ALL provisioning steps") { rerun(StepId.values().toList()) }
-        caption("Re-run a single step:")
-        StepId.values().forEach { id -> button("• ${id.title}") { rerun(listOf(id)) } }
-
-        // ---- 3. Revert -------------------------------------------------------------------
-        section("Revert (rollback)")
-        caption("Each action is reversible. \"Undo everything\" runs them in order and finally " +
-            "releases Device Owner, after which this app can be uninstalled normally — no factory reset.")
-        val revertStatus = caption("")
-        button("1. Unhide stock launcher") { runRevert(revertStatus) { RevertManager(this).unhideStockLauncher() } }
-        button("2. Clear default-home lock") { runRevert(revertStatus) { RevertManager(this).clearPersistentHome() } }
-        button("3. Restore screen timeout") { runRevert(revertStatus) { RevertManager(this).restoreDisplayTimeout() } }
-        button("Forget FLO Secure Wi-Fi (optional)") { runRevert(revertStatus) { RevertManager(this).forgetWifi() } }
-        button("4. Release Device Owner") {
-            confirm("Release Device Owner?",
-                "Do the unhide/clear/restore steps first, or use \"Undo everything\".") {
-                runRevert(revertStatus) { RevertManager(this).clearDeviceOwner() }
-            }
-        }
-        dangerButton("⚠ Undo everything → stock device") {
-            confirm("Undo everything?",
-                "Unhide launcher → clear home lock → restore timeout → release Device Owner. " +
-                    "The device returns to stock behavior and this app becomes uninstallable.") {
-                undoEverything(revertStatus)
-            }
-        }
-
-        // ---- 4. Security -----------------------------------------------------------------
-        section("Security")
-        val newPin = field("New 4-digit PIN", "", numeric = true, password = true)
-        button("Change admin PIN") {
-            val p = newPin.text.toString()
-            if (p.length == 4 && p.all { it.isDigit() }) {
-                cfg.setPin(p); newPin.text.clear(); toast("PIN changed")
-                ProvisioningLog.i(this, "Admin: PIN changed")
-            } else toast("PIN must be exactly 4 digits")
-        }
-
-        section("")
-        button("Close") { goHome() }
-    }
-
-    // ---- home-app rows & picker ----------------------------------------------------------
-
-    private fun appRow(pkg: String, label: String, installed: Boolean) {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(6), 0, dp(6))
-        }
-        row.addView(TextView(this).apply {
-            text = if (installed) "$label\n$pkg" else "$label\n$pkg  — NOT INSTALLED"
-            setTextColor(if (installed) Color.WHITE else Color.parseColor("#C8A24D"))
-            textSize = 13f
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-        })
-        row.addView(Button(this).apply {
-            text = "Remove"
-            setOnClickListener {
-                cfg.removeHomeApp(pkg); ProvisioningLog.i(this@AdminPanelActivity, "Admin: removed home app $pkg"); build()
-            }
-        })
-        container.addView(row)
-    }
-
-    private fun showAppPicker() {
-        val apps = AppLauncher.installedLaunchableApps(this)
-        if (apps.isEmpty()) { toast("No launchable apps found"); return }
-        val labels = apps.map { "${it.label}  (${it.resolvedPackage})" }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("Add an installed app")
-            .setItems(labels) { _, which ->
-                apps[which].resolvedPackage?.let {
-                    cfg.addHomeApp(it); ProvisioningLog.i(this, "Admin: added home app $it (picker)"); build()
+            progressTintList = ColorStateList.valueOf(Ui.ACCENT)
+            thumbTintList = ColorStateList.valueOf(Ui.ACCENT)
+            progressBackgroundTintList = ColorStateList.valueOf(Color.parseColor("#3A3A3A"))
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                    valueLabel.text = "${p + ICON_MIN} dp"
                 }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {
+                    cfg.iconSizeDp = sb.progress + ICON_MIN
+                    ProvisioningLog.i(this@AdminPanelActivity, "Admin: icon size ${cfg.iconSizeDp}dp")
+                }
+            })
+        }
+        sliderRow.addView(slider); sliderRow.addView(valueLabel)
+        container.addView(sliderRow)
+        divider()
+
+        // Lists (filled by refreshLists()).
+        sectionLabel("Shown on home screen (in order)", topDp = 18)
+        shownList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+        }
+        container.addView(shownList)
+
+        sectionLabel("Available apps", topDp = 22)
+        availableList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+        }
+        container.addView(availableList)
+
+        divider(topDp = 24)
+        val advanced = Ui.outlinedButton(this, "Advanced device management…") {
+            startActivity(Intent(this, AdvancedAdminActivity::class.java))
+        }
+        (advanced.layoutParams as LinearLayout.LayoutParams).topMargin = dp(8)
+        container.addView(advanced)
+        container.addView(TextView(this).apply {
+            text = "Provisioning status, re-run steps, Wi-Fi, revert / undo everything, change PIN."
+            setTextColor(Ui.TEXT_FAINT); textSize = 12f; setPadding(dp(4), dp(8), 0, 0)
+        })
+
+        refreshLists()
     }
 
-    // ---- actions -------------------------------------------------------------------------
+    private fun refreshLists() {
+        if (!::shownList.isInitialized) return
+        val shown = cfg.homeApps
+        selectedCount.text = "${shown.size} selected"
 
-    private fun rerun(ids: List<StepId>) {
-        startActivity(
-            Intent(this, com.flo.v3poslauncher.provisioning.ProvisioningActivity::class.java)
-                .setAction("com.flo.v3poslauncher.ACTION_RERUN")
-                .putExtra("steps", ids.map { it.name }.toTypedArray())
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
-    }
+        shownList.removeAllViews()
+        if (shown.isEmpty()) {
+            shownList.addView(TextView(this).apply {
+                text = "Nothing selected — tick apps below to show them on the home screen."
+                setTextColor(Ui.TEXT_FAINT); textSize = 13f; setPadding(dp(4), dp(6), 0, dp(6))
+            })
+        }
+        shown.forEachIndexed { i, pkg ->
+            val entry = AppLauncher.resolve(this, pkg)
+            shownList.addView(
+                appRow(
+                    label = if (entry.installed) entry.label else "${entry.label}  (not installed)",
+                    pkg = pkg, icon = entry.icon, checked = true,
+                    canUp = i > 0, canDown = i < shown.size - 1,
+                    onUp = { cfg.moveHomeApp(pkg, -1); refreshLists() },
+                    onDown = { cfg.moveHomeApp(pkg, +1); refreshLists() },
+                    onToggle = { cfg.removeHomeApp(pkg); ProvisioningLog.i(this, "Admin: removed home app $pkg"); refreshLists() },
+                ),
+            )
+        }
 
-    private fun runRevert(status: TextView, action: () -> RevertManager.StepOutcome) {
-        status.setTextColor(Color.parseColor("#4DA3FF")); status.text = "Working…"
-        thread(name = "admin-revert") {
-            val o = action()
-            main.post {
-                status.text = "${o.name}: ${if (o.ok) "OK" else "FAILED"} — ${o.detail}"
-                status.setTextColor(if (o.ok) Color.parseColor("#4CD964") else Color.parseColor("#FF3B30"))
+        availableList.removeAllViews()
+        val shownLower = shown.map { it.lowercase() }.toSet()
+        val available = AppLauncher.installedLaunchableApps(this)
+            .filter { e ->
+                val p = e.resolvedPackage
+                p != null && p != packageName && p.lowercase() !in shownLower
             }
+        if (available.isEmpty()) {
+            availableList.addView(TextView(this).apply {
+                text = "No other launchable apps on this device."
+                setTextColor(Ui.TEXT_FAINT); textSize = 13f; setPadding(dp(4), dp(6), 0, dp(6))
+            })
+        }
+        available.forEach { e ->
+            val p = e.resolvedPackage!!
+            availableList.addView(
+                appRow(
+                    label = e.label, pkg = p, icon = e.icon, checked = false,
+                    canUp = false, canDown = false, onUp = {}, onDown = {},
+                    onToggle = { cfg.addHomeApp(p); ProvisioningLog.i(this, "Admin: added home app $p"); refreshLists() },
+                ),
+            )
         }
     }
 
-    private fun undoEverything(status: TextView) {
-        status.setTextColor(Color.parseColor("#4DA3FF")); status.text = "Reverting…"
-        thread(name = "admin-undo-all") {
-            val sb = StringBuilder()
-            RevertManager(this).undoEverything { o ->
-                sb.append(if (o.ok) "✓ " else "✕ ").append(o.name).append(": ").append(o.detail).append('\n')
-                main.post { status.text = sb.toString() }
-            }
+    // ---- rows -----------------------------------------------------------------------------
+
+    private fun appRow(
+        label: String, pkg: String, icon: android.graphics.drawable.Drawable?, checked: Boolean,
+        canUp: Boolean, canDown: Boolean, onUp: () -> Unit, onDown: () -> Unit, onToggle: () -> Unit,
+    ): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            background = Ui.rounded(if (checked) Ui.CARD else Color.TRANSPARENT, 10, this@AdminPanelActivity)
+            val h = dp(12); val v = dp(10)
+            setPadding(h, v, h, v)
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
         }
+        row.addView(ImageView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44)).apply { rightMargin = dp(14) }
+            if (icon != null) setImageDrawable(icon) else setImageResource(com.flo.v3poslauncher.R.drawable.ic_launcher_foreground)
+        })
+        val texts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+        }
+        texts.addView(TextView(this).apply { text = label; setTextColor(Ui.TEXT); textSize = 16f })
+        texts.addView(TextView(this).apply {
+            text = pkg; setTextColor(Ui.TEXT_DIM); textSize = 12f; typeface = Typeface.MONOSPACE
+        })
+        row.addView(texts)
+
+        if (checked) {
+            row.addView(arrowButton("⌃", canUp, onUp))   // ⌃
+            row.addView(arrowButton("⌄", canDown, onDown)) // ⌄
+        }
+        row.addView(CheckBox(this).apply {
+            isChecked = checked
+            buttonTintList = ColorStateList.valueOf(if (checked) Ui.ACCENT else Ui.TEXT_DIM)
+            layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { leftMargin = dp(8) }
+            setOnClickListener { onToggle() }
+        })
+        return row
     }
 
-    private fun goHome() {
+    private fun arrowButton(glyph: String, enabled: Boolean, onClick: () -> Unit): View =
+        TextView(this).apply {
+            text = glyph; textSize = 22f; gravity = Gravity.CENTER
+            setTextColor(if (enabled) Ui.TEXT else Color.parseColor("#4A4A4A"))
+            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
+            isEnabled = enabled
+            if (enabled) setOnClickListener { onClick() }
+        }
+
+    // ---- helpers --------------------------------------------------------------------------
+
+    private fun sectionLabel(t: String, topDp: Int) = container.addView(TextView(this).apply {
+        text = t; setTextColor(Ui.TEXT); textSize = 15f; setTypeface(Typeface.DEFAULT_BOLD)
+        setPadding(0, dp(topDp), 0, dp(4))
+    })
+
+    private fun divider(topDp: Int = 16) = container.addView(View(this).apply {
+        setBackgroundColor(Color.parseColor("#2E2E2E"))
+        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, dp(1)).apply { topMargin = dp(topDp) }
+    })
+
+    private fun done() {
         startActivity(
             Intent(this, com.flo.v3poslauncher.home.HomeActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
@@ -213,66 +269,10 @@ class AdminPanelActivity : Activity() {
         finish()
     }
 
-    private fun stepSummary(): String =
-        StepId.values().joinToString("\n") { "• ${it.title}: ${cfg.getStepStatus(it.name)}" }
+    private fun dp(v: Int): Int = Ui.dp(this, v)
 
-    // ---- tiny view DSL -------------------------------------------------------------------
-
-    private fun title(t: String) = container.addView(TextView(this).apply {
-        text = t; setTextColor(Color.WHITE); textSize = 22f; setTypeface(Typeface.DEFAULT_BOLD)
-        setPadding(0, 0, 0, dp(8))
-    })
-
-    private fun section(t: String) = container.addView(TextView(this).apply {
-        text = t; setTextColor(Color.parseColor("#4DA3FF")); textSize = 15f; setTypeface(Typeface.DEFAULT_BOLD)
-        setPadding(0, dp(22), 0, dp(6))
-    })
-
-    private fun caption(t: String): TextView = TextView(this).apply {
-        text = t; setTextColor(Color.parseColor("#9A9A9A")); textSize = 12f
-        setPadding(0, dp(2), 0, dp(6))
-    }.also { container.addView(it) }
-
-    private fun field(label: String, value: String, numeric: Boolean = false, password: Boolean = false, hint: String = ""): EditText {
-        container.addView(TextView(this).apply {
-            text = label; setTextColor(Color.parseColor("#C8C8C8")); textSize = 12f; setPadding(0, dp(8), 0, dp(2))
-        })
-        val e = EditText(this).apply {
-            setText(value); setTextColor(Color.WHITE); textSize = 14f
-            if (hint.isNotEmpty()) this.hint = hint
-            setHintTextColor(Color.parseColor("#6E6E6E"))
-            setBackgroundColor(Color.parseColor("#161616"))
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            inputType = when {
-                password -> InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-                numeric -> InputType.TYPE_CLASS_NUMBER
-                else -> InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            }
-            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
-        }
-        container.addView(e)
-        return e
+    private companion object {
+        const val ICON_MIN = 48
+        const val ICON_MAX = 256
     }
-
-    private fun button(label: String, onClick: () -> Unit) = container.addView(Button(this).apply {
-        text = label; setOnClickListener { onClick() }
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(6) }
-    })
-
-    private fun dangerButton(label: String, onClick: () -> Unit) = container.addView(Button(this).apply {
-        text = label; setTextColor(Color.WHITE); setBackgroundColor(Color.parseColor("#5A1A17"))
-        setOnClickListener { onClick() }
-        layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(10) }
-    })
-
-    private fun confirm(title: String, message: String, onYes: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle(title).setMessage(message)
-            .setPositiveButton("Yes") { _, _ -> onYes() }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun toast(t: String) = Toast.makeText(this, t, Toast.LENGTH_SHORT).show()
-    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 }

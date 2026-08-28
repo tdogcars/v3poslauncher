@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The launcher itself makes NO network calls (no downloads, no analytics, no telemetry).
-         Chrome does its own networking; the launcher needs no INTERNET permission. -->
+    <!-- The launcher makes NO network calls on its own (no downloads, no analytics, no
+         telemetry). INTERNET is held solely for the technician's "Run speed test" button on
+         the home screen, which only runs when tapped. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Showing the connected SSID on the home screen requires fine location on Android 10+.
+         The Device Owner grants this to itself; it is never used for anything else. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Wi-Fi: saving the "FLO Secure" network as Device Owner. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
@@ -120,6 +127,13 @@
 
         <activity
             android:name=".admin.AdminPanelActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".admin.AdvancedAdminActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:excludeFromRecents="true"
             android:exported="false"
