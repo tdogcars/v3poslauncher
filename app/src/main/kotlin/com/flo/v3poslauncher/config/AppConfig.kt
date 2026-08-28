@@ -15,6 +15,13 @@ class AppConfig private constructor(context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences("v3poslauncher", Context.MODE_PRIVATE)
 
+    /** Observe changes (the Compose UI turns this into a Flow). Listener is held weakly by Android. */
+    fun addChangeListener(l: SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs.registerOnSharedPreferenceChangeListener(l)
+
+    fun removeChangeListener(l: SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs.unregisterOnSharedPreferenceChangeListener(l)
+
     // ---- Home app grid -------------------------------------------------------------------
 
     /**

@@ -86,7 +86,13 @@ class PinActivity : Activity() {
         if (cfg.verifyPin(pin)) {
             cfg.pinFailedAttempts = 0
             cfg.pinLockoutUntil = 0
-            startActivity(Intent(this, AdminPanelActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // Home is singleTask: this re-delivers the intent and the Compose UI opens
+            // the Launcher-configuration screen.
+            startActivity(
+                Intent(this, com.flo.v3poslauncher.home.HomeActivity::class.java)
+                    .putExtra(com.flo.v3poslauncher.home.HomeActivity.EXTRA_OPEN_SETTINGS, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            )
             finish()
         } else {
             cfg.pinFailedAttempts += 1

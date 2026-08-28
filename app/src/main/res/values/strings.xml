@@ -1,4 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FLO POS Launcher</string>
+
+    <!-- Launcher UI strings (ported from the v1 POS Launcher). -->
+
+    <string name="launch_failed">Could not open %1$s</string>
+
+    <string name="default_home_title">Make FLO POS Launcher the home app</string>
+    <string name="default_home_body">Choose FLO POS Launcher and tap “Always” so the Home button always returns to the POS screen.</string>
+    <string name="default_home_set">Set as default home app</string>
+    <string name="default_home_open_settings">Open home settings</string>
+    <string name="default_home_continue">Continue without setting</string>
+    <string name="default_home_manual_hint">Open Settings → Apps → Default apps → Home app and choose FLO POS Launcher.</string>
+
+    <string name="missing_title">No apps selected yet</string>
+    <string name="missing_hint">Long-press anywhere on the screen for two seconds to open launcher settings and choose your apps.</string>
+    <string name="missing_open_settings">Launcher settings</string>
+
+    <string name="settings_title">Launcher configuration</string>
+    <string name="settings_done">Done</string>
+    <string name="settings_icon_size">Icon size</string>
+    <string name="settings_icon_size_value">%1$d dp</string>
+    <string name="settings_selected_count">%1$d selected</string>
+    <string name="settings_section_selected">Shown on home screen (in order)</string>
+    <string name="settings_section_available">Available apps</string>
+    <string name="settings_move_up">Move up</string>
+    <string name="settings_move_down">Move down</string>
+
+    <string name="net_wifi">Wi-Fi</string>
+    <string name="net_ethernet">Ethernet</string>
+    <string name="net_cellular">Mobile data</string>
+    <string name="net_offline">Offline</string>
+    <string name="speedtest_run">Run speed test</string>
+    <string name="speedtest_cancel">Cancel</string>
+    <string name="speedtest_testing">Testing…</string>
+    <string name="speedtest_result">↓ %1$s · ↑ %2$s Mbps · %3$d ms</string>
+    <string name="speedtest_failed_detail">Test failed — %1$s</string>
+    <string name="settings_loading_apps">Loading installed apps…</string>
+    <string name="settings_no_apps">No launchable apps found on this device.</string>
+    <string name="settings_advanced">Advanced device management…</string>
 </resources>

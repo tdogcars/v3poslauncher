@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // ---------------------------------------------------------------------------
@@ -87,8 +88,11 @@ android {
     }
 
     buildFeatures {
-        // We inject the Wi-Fi password default via BuildConfig; nothing else uses it.
+        // We inject the Wi-Fi password default via BuildConfig.
         buildConfig = true
+        // The launcher UI (home screen, Launcher configuration) is Jetpack Compose,
+        // ported from the v1 POS Launcher (com.blurredlimes.poslauncher).
+        compose = true
     }
 
     lint {
@@ -105,7 +109,16 @@ kotlin {
 }
 
 dependencies {
-    // Intentionally empty. The launcher uses only the Android framework: no AndroidX,
-    // no coroutines, no networking library. Fewer bytes on payment hardware, and the
-    // whole surface is auditable.
+    // Provisioning / Device Owner code is framework-only. The visible launcher UI is the
+    // v1 Compose UI, so Compose + a few AndroidX libraries are pulled in for it. No
+    // networking library: the only network call is the technician's speed test.
+    implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }

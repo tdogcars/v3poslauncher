@@ -19,7 +19,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Needed on Android 11+ to enumerate every package that resolves HOME (stock launcher
-         detection) and to show the POS icon. A launcher is the canonical legitimate holder. -->
+         detection) and to list installed apps in Launcher configuration. A launcher is the
+         canonical legitimate holder. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 
     <queries>
@@ -124,13 +125,6 @@
             android:excludeFromRecents="true"
             android:exported="false"
             android:windowSoftInputMode="stateVisible|adjustResize" />
-
-        <activity
-            android:name=".admin.AdminPanelActivity"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".admin.AdvancedAdminActivity"
