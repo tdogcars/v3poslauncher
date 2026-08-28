@@ -1,34 +1,29 @@
 # Vercel host for the launcher APK + technician setup page
 
-This folder is a static site. It serves two files publicly over HTTPS:
+This folder is a static site, deployed by Vercel's Git integration from the `main` branch
+(Vercel project **flo-pos-setup**, root directory `vercel-site`). It serves two files publicly:
 
 - `/v3poslauncher-release.apk` — the signed launcher, which the QR tells the device to download.
 - `/` — a technician "scan to set up" page that displays the QR and the steps.
 
-You drop two built files in here before deploying:
+`vercel.json` sets the right `Content-Type` for the APK. `.vercelignore` keeps this README out
+of the deploy.
 
-- `v3poslauncher-release.apk`  ← the signed APK from your build
-- `provisioning-qr.png`        ← the QR generated for this Vercel URL
+## How updates flow (automated)
 
-`vercel.json` already sets the right `Content-Type` for the APK.
+1. Push a version tag: `git tag v3.0.2 && git push origin v3.0.2`
+2. GitHub Actions builds + signs the APK, verifies the signing cert matches the keystore,
+   publishes a GitHub Release, generates the QR, **and commits the APK + QR into this folder
+   on `main`**.
+3. Vercel sees the push to `main` and redeploys within about a minute.
 
-## Deploy (macOS)
+The URL never changes (`https://flo-pos-setup.vercel.app/v3poslauncher-release.apk`), so printed
+QRs keep working. Run `git pull` afterwards to pick up the bot's commit locally.
 
-```bash
-npm i -g vercel            # one-time
-cd vercel-site
-vercel login              # one-time, opens browser
+## Manual fallback
 
-# First deploy — name the project so the URL is stable:
-vercel deploy --prod --yes --name flo-pos-setup
-```
+Drop a built `v3poslauncher-release.apk` and `provisioning-qr.png` in here, commit, and push
+`main` — Vercel redeploys. Or, with the Vercel CLI: `cd vercel-site && vercel deploy --prod`.
 
-Your public URL will be `https://flo-pos-setup.vercel.app`, so the APK lands at
-`https://flo-pos-setup.vercel.app/v3poslauncher-release.apk` — which is exactly the
-`DOWNLOAD_URL` the QR is generated against.
-
-> If you pick a different project name, use that name in the URL AND set the repo's
-> `DOWNLOAD_URL` variable to match, then regenerate the QR so it points to the right place.
-
-To publish an updated APK later, replace the file here and run `vercel deploy --prod` again.
-The URL stays the same, so the printed QR keeps working.
+> If the Vercel project name ever changes, set the repo variable `DOWNLOAD_URL` to the new APK
+> URL and push a new tag so the QR is regenerated to match.

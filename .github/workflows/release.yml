@@ -195,3 +195,27 @@ jobs:
             ${{ env.APK_PATH }}
             provisioning-qr.png
           fail_on_unmatched_files: true
+
+      # Vercel deploys vercel-site/ from the main branch, so committing the freshly built
+      # APK + QR there publishes them at the stable URL the printed QRs point to.
+      - name: Publish APK + QR to vercel-site/ on main (triggers Vercel deploy)
+        if: github.ref_type == 'tag'
+        env:
+          VERSION_NAME: ${{ steps.ver.outputs.version_name }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          cp "${APK_PATH}" "${RUNNER_TEMP}/apk.tmp"
+          cp provisioning-qr.png "${RUNNER_TEMP}/qr.tmp"
+          git fetch origin main
+          git checkout -B main origin/main
+          cp "${RUNNER_TEMP}/apk.tmp" vercel-site/v3poslauncher-release.apk
+          cp "${RUNNER_TEMP}/qr.tmp"  vercel-site/provisioning-qr.png
+          git add vercel-site/v3poslauncher-release.apk vercel-site/provisioning-qr.png
+          if git diff --cached --quiet; then
+            echo "vercel-site/ already up to date."
+          else
+            git commit -m "vercel-site: publish launcher v${VERSION_NAME} + QR [skip ci]"
+            git push origin main
+            echo "Pushed to main — Vercel will redeploy https://flo-pos-setup.vercel.app within ~1 minute."
+          fi
