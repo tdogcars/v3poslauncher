@@ -86,6 +86,28 @@ class AppConfig private constructor(context: Context) {
         get() = prefs.getBoolean(K_HIDE_TASKBAR, false)
         set(v) = prefs.edit().putBoolean(K_HIDE_TASKBAR, v).apply()
 
+    /**
+     * Zero-touch taskbar answer: hide every launchable app that is not on the home-app list, and
+     * hide the system app-prediction service so the taskbar shows no "suggested apps". Quickstep
+     * itself stays, so Back / Home / Recents keep working. Both default ON.
+     */
+    var lockdownApps: Boolean
+        get() = prefs.getBoolean(K_LOCKDOWN_APPS, true)
+        set(v) = prefs.edit().putBoolean(K_LOCKDOWN_APPS, v).apply()
+
+    var disableAppSuggestions: Boolean
+        get() = prefs.getBoolean(K_DISABLE_SUGGESTIONS, true)
+        set(v) = prefs.edit().putBoolean(K_DISABLE_SUGGESTIONS, v).apply()
+
+    /** Non-allowed apps we hid (AppLockdown), so revert unhides exactly those. */
+    var hiddenOtherApps: Set<String>
+        get() = prefs.getStringSet(K_HIDDEN_OTHER, emptySet())?.toSet() ?: emptySet()
+        set(v) = prefs.edit().putStringSet(K_HIDDEN_OTHER, v).apply()
+
+    var hiddenPredictionPackage: String
+        get() = prefs.getString(K_HIDDEN_PREDICTION, "") ?: ""
+        set(v) = prefs.edit().putString(K_HIDDEN_PREDICTION, v).apply()
+
     /** Packages we actually hid, so revert unhides exactly those. */
     var hiddenPackages: Set<String>
         get() = prefs.getStringSet(K_HIDDEN_PKGS, emptySet())?.toSet() ?: emptySet()
@@ -157,6 +179,10 @@ class AppConfig private constructor(context: Context) {
         private const val K_WIFI_PSK = "wifi_psk"
         private const val K_HIDE_STOCK = "hide_stock_launcher"
         private const val K_HIDE_TASKBAR = "hide_taskbar"
+        private const val K_LOCKDOWN_APPS = "lockdown_apps"
+        private const val K_DISABLE_SUGGESTIONS = "disable_app_suggestions"
+        private const val K_HIDDEN_OTHER = "hidden_other_apps"
+        private const val K_HIDDEN_PREDICTION = "hidden_prediction_pkg"
         private const val K_HIDDEN_PKGS = "hidden_packages"
         private const val K_ORIG_TIMEOUT = "orig_screen_off_timeout"
         private const val K_ORIG_STAY_ON = "orig_stay_on_plugged"

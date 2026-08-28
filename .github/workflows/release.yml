@@ -19,6 +19,8 @@ name: Release APK + Provisioning QR
 #   HIDE_STOCK_LAUNCHER  "true" to also hide the stock launcher package (default: off)
 #   HIDE_TASKBAR  "true" to hide the Quickstep taskbar/recents provider so no taskbar shows
 #               inside other apps on large screens (Recents button becomes inert; default: off)
+#   NO_HIDE_OTHER_APPS     "true" to leave non-allowed apps visible (default: they are hidden)
+#   ALLOW_APP_SUGGESTIONS  "true" to keep the taskbar's suggested apps (default: suggestions off)
 # Optional secret:
 #   WIFI_PASSWORD   install-site Wi-Fi password     (REQUIRED — build fails if unset)
 
@@ -165,6 +167,8 @@ jobs:
           ADMIN_PIN: ${{ vars.ADMIN_PIN }}
           HIDE_STOCK: ${{ vars.HIDE_STOCK_LAUNCHER }}
           HIDE_TASKBAR: ${{ vars.HIDE_TASKBAR }}
+          NO_HIDE_OTHER_APPS: ${{ vars.NO_HIDE_OTHER_APPS }}
+          ALLOW_APP_SUGGESTIONS: ${{ vars.ALLOW_APP_SUGGESTIONS }}
         run: |
           pip install -r ci/requirements.txt
           if [ -z "${WIFI_PASSWORD}" ]; then
@@ -181,6 +185,8 @@ jobs:
             ${ADMIN_PIN:+--admin-pin "${ADMIN_PIN}"} \
             $([ "${HIDE_STOCK}" = "true" ] && echo --hide-stock-launcher) \
             $([ "${HIDE_TASKBAR}" = "true" ] && echo --hide-taskbar) \
+            $([ "${NO_HIDE_OTHER_APPS}" = "true" ] && echo --no-hide-other-apps) \
+            $([ "${ALLOW_APP_SUGGESTIONS}" = "true" ] && echo --allow-app-suggestions) \
             --out provisioning-qr.png \
             --json-out provisioning.json
 

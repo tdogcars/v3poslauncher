@@ -51,8 +51,11 @@ suspend fun queryLaunchableApps(context: Context, iconSizePx: Int): List<Install
     withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        @Suppress("DEPRECATION")
-        pm.queryIntentActivities(launcherIntent, 0)
+        // MATCH_UNINSTALLED_PACKAGES lets a Device Owner see apps it has hidden (AppLockdown), so
+        // the technician can tick them back on; the sync then unhides them.
+        val flags = android.content.pm.PackageManager.MATCH_ALL or
+            android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES
+        pm.queryIntentActivities(launcherIntent, flags)
             .asSequence()
             .map { it.activityInfo }
             .filter { it != null && it.packageName != context.packageName }

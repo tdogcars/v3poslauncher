@@ -3,6 +3,7 @@ package com.flo.v3poslauncher.boot
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.provisioning.ProvisioningLog
@@ -31,6 +32,8 @@ class BootReceiver : BroadcastReceiver() {
                 if (dp.isDeviceOwner) {
                     val w = WifiProvisioner(context).ensureNetwork(cfg.wifiSsid, cfg.wifiPassword)
                     ProvisioningLog.i(context, "BootReceiver: wifi -> ${w.message}")
+                    runCatching { AppLockdown.sync(context) }
+                        .onFailure { ProvisioningLog.w(context, "BootReceiver: app lockdown re-sync failed: ${it.message}") }
                     if (cfg.displayPolicyApplied) {
                         runCatching {
                             dp.dpm.setGlobalSetting(dp.admin, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "7")

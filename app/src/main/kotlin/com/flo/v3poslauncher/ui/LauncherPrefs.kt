@@ -2,6 +2,7 @@ package com.flo.v3poslauncher.ui
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.config.AppConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -40,6 +41,8 @@ object LauncherPrefs {
 
     fun setPosPackages(context: Context, packages: List<String>) {
         AppConfig.get(context).homeApps = packages
+        // Newly allowed apps must be unhidden (and newly removed ones hidden) right away.
+        AppLockdown.syncAsync(context)
     }
 
     fun setIconSize(context: Context, sizeDp: Int) {

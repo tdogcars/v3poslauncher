@@ -10,7 +10,8 @@ enum class StepId(val title: String) {
     HIDE_STOCK("Hide stock launcher / taskbar"),
     WIFI("Save FLO Secure Wi-Fi"),
     DISPLAY("Apply display policy"),
-    APPS("Verify home apps");
+    APPS("Verify home apps"),
+    LOCKDOWN("Hide non-allowed apps & suggestions");
 }
 
 /** Outcome of one step. WARN continues the sequence; FAIL pauses it for Retry / Skip. */

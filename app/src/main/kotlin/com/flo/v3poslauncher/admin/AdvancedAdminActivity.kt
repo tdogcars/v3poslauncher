@@ -65,8 +65,29 @@ class AdvancedAdminActivity : Activity() {
         caption("Re-run a single step:")
         StepId.values().forEach { id -> button("• ${id.title}") { rerun(listOf(id)) } }
 
-        // ---- 1b. Taskbar (experimental) ----------------------------------------------------
-        section("Large-screen taskbar (experimental)")
+        // ---- 1b. Allowed apps ---------------------------------------------------------------
+        section("Allowed apps (taskbar contents)")
+        caption("Zero-touch, no accessibility toggle: Quickstep stays (Back / Home / Recents keep " +
+            "working) but every app that is NOT on the home-app list is hidden, and the system " +
+            "app-prediction service is hidden so the taskbar shows no suggested apps. " +
+            "Currently: apps ${if (cfg.lockdownApps) "LOCKED DOWN" else "all visible"}, " +
+            "suggestions ${if (cfg.disableAppSuggestions) "OFF" else "on"}. " +
+            "Hidden by this: ${cfg.hiddenOtherApps.size} app(s).")
+        val lockStatus = caption("")
+        button(if (cfg.lockdownApps) "Hiding non-allowed apps: ON — turn off (unhide all)" else "Hide non-allowed apps: OFF — turn on") {
+            cfg.lockdownApps = !cfg.lockdownApps
+            ProvisioningLog.i(this, "Admin: lockdownApps=${cfg.lockdownApps}")
+            applyLockdown(lockStatus)
+        }
+        button(if (cfg.disableAppSuggestions) "Taskbar suggestions: OFF — turn on" else "Taskbar suggestions: ON — turn off") {
+            cfg.disableAppSuggestions = !cfg.disableAppSuggestions
+            ProvisioningLog.i(this, "Admin: disableAppSuggestions=${cfg.disableAppSuggestions}")
+            applyLockdown(lockStatus)
+        }
+        button("Re-apply now") { applyLockdown(lockStatus) }
+
+        // ---- 1c. Taskbar (experimental) ----------------------------------------------------
+        section("Remove the taskbar entirely (experimental)")
         caption("On Android 12L+ tablets/AIOs the taskbar inside other apps is drawn by the stock " +
             "Quickstep launcher, which is also the Recents provider. Hiding it removes the taskbar " +
             "AND makes the Recents button inert. Test on a disposable unit, then reboot it, before " +
@@ -111,6 +132,7 @@ class AdvancedAdminActivity : Activity() {
             "releases Device Owner, after which this app can be uninstalled normally — no factory reset.")
         val revertStatus = caption("")
         button("1. Unhide stock launcher") { runRevert(revertStatus) { RevertManager(this).unhideStockLauncher() } }
+        button("1b. Unhide non-allowed apps & suggestions") { runRevert(revertStatus) { RevertManager(this).unhideOtherApps() } }
         button("2. Clear default-home lock") { runRevert(revertStatus) { RevertManager(this).clearPersistentHome() } }
         button("3. Restore screen timeout") { runRevert(revertStatus) { RevertManager(this).restoreDisplayTimeout() } }
         button("Forget install-site Wi-Fi (optional)") { runRevert(revertStatus) { RevertManager(this).forgetWifi() } }
@@ -144,6 +166,23 @@ class AdvancedAdminActivity : Activity() {
     }
 
     // ---- actions -------------------------------------------------------------------------
+
+    private fun applyLockdown(status: TextView) {
+        status.setTextColor(Ui.ACCENT); status.text = "Applying…"
+        thread(name = "admin-lockdown") {
+            val r = runCatching { AppLockdown.sync(this) }
+            main.post {
+                r.onSuccess { o ->
+                    status.setTextColor(if (o.failed.isEmpty()) Ui.OK else Ui.WARN)
+                    status.text = "Hidden now: ${cfg.hiddenOtherApps.size}. Newly hidden ${o.hidden.size}, unhidden ${o.unhidden.size}" +
+                        (if (o.failed.isEmpty()) "." else "; could not change: ${o.failed.joinToString()}.")
+                }.onFailure {
+                    status.setTextColor(Ui.ERR); status.text = "Failed: ${it.message}"
+                }
+                build()
+            }
+        }
+    }
 
     private fun rerun(ids: List<StepId>) {
         startActivity(

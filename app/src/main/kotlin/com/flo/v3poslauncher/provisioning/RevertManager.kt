@@ -2,6 +2,7 @@ package com.flo.v3poslauncher.provisioning
 
 import android.content.Context
 import android.provider.Settings
+import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.wifi.WifiProvisioner
@@ -35,6 +36,11 @@ class RevertManager(context: Context) {
         cfg.hiddenPackages = failed.toSet() // keep only the ones still hidden
         if (failed.isEmpty()) true to "Unhid: ${restored.joinToString()}"
         else false to "Unhid ${restored.joinToString()}; FAILED: ${failed.joinToString()}"
+    }
+
+    /** 1b. Un-hide the non-allowed apps and the app-prediction service (AppLockdown). */
+    fun unhideOtherApps(): StepOutcome = wrap("Unhide non-allowed apps & suggestions") {
+        AppLockdown.unhideAll(appContext)
     }
 
     /** 2. Clear our persistent HOME preference so the stock launcher is default again. */
@@ -78,6 +84,7 @@ class RevertManager(context: Context) {
         fun step(o: StepOutcome) { results.add(o); progress(o); ProvisioningLog.i(appContext, "Revert: ${o.name}: ${if (o.ok) "OK" else "FAIL"} — ${o.detail}") }
 
         step(unhideStockLauncher())
+        step(unhideOtherApps())
         step(clearPersistentHome())
         step(restoreDisplayTimeout())
 
