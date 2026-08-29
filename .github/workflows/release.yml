@@ -226,7 +226,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "vercel-site/ already up to date."
           else
-            git commit -m "vercel-site: publish launcher v${VERSION_NAME} + QR [skip ci]"
+            git commit -m "vercel-site: publish launcher v${VERSION_NAME} + QR"
             git push origin main
             echo "Pushed to main — Vercel will redeploy https://flo-pos-setup.vercel.app within ~1 minute."
           fi
