@@ -222,13 +222,19 @@ fun HomeScreen(config: LauncherConfig, onOpenSettings: () -> Unit) {
 @Composable
 private fun ScreensaverWarning(refreshKey: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val needed by produceState(initialValue = false, refreshKey) {
+    // 0 = fine, 1 = switched off, 2 = switched on but no dream this build has would ever run.
+    val problem by produceState(initialValue = 0, refreshKey) {
         while (true) {
-            value = AppConfig.get(context).screensaverEnabled && !Screensaver.isOnDevice(context)
+            value = when {
+                !AppConfig.get(context).screensaverEnabled -> 0
+                Screensaver.isOnDevice(context) -> 0
+                Screensaver.isToggleOn(context) -> 2
+                else -> 1
+            }
             delay(2000)
         }
     }
-    if (!needed) return
+    if (problem == 0) return
 
     Column(
         modifier = modifier
@@ -240,14 +246,16 @@ private fun ScreensaverWarning(refreshKey: Int, modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Screen saver is off on this terminal",
+            text = if (problem == 2) "Screen saver is on, but no screen saver is chosen"
+            else "Screen saver is off on this terminal",
             color = Color(0xFFE8B93B),
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
-            text = "Tap to open Android's screen saver settings",
+            text = if (problem == 2) "Nothing would appear and the screen would go black. Tap to pick one."
+            else "Tap to open Android's screen saver settings",
             color = Color(0xFFB59B62),
             fontSize = 12.sp,
             textAlign = TextAlign.Center,

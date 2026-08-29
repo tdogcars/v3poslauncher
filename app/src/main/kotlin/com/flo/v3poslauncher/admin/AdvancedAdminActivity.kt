@@ -85,6 +85,7 @@ class AdvancedAdminActivity : Activity() {
         val onDevice = Screensaver.isOnDevice(this)
         val state = when {
             onDevice -> "ON, starts after ${cfg.screensaverIdleMinutes} min idle"
+            Screensaver.isToggleOn(this) -> "switched on but NO usable screen saver chosen — nothing would appear"
             cfg.screensaverEnabled -> "wanted, but switched OFF on this terminal"
             else -> "off (not wanted)"
         }
