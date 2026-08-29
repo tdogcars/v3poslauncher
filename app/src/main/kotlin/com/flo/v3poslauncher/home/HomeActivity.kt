@@ -29,6 +29,7 @@ import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.admin.PinActivity
+import com.flo.v3poslauncher.admin.Screensaver
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.provisioning.ProvisioningLog
 import com.flo.v3poslauncher.ui.DefaultHomePrompt
@@ -73,6 +74,8 @@ class HomeActivity : ComponentActivity() {
      */
     private fun selfHeal() {
         AppLockdown.syncAsync(this)
+        // Picks up a WRITE_SECURE_SETTINGS grant made after provisioning, with no return visit.
+        Screensaver.reapplyAsync(this)
     }
 
     override fun onResume() {

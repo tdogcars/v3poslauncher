@@ -24,6 +24,8 @@ import com.flo.v3poslauncher.provisioning.ProvisioningLog
  *   "dedicatedTerminal": "true",                             // optional, default true (v3.5+)
  *   "hideOtherApps": "false",                                // optional, default FALSE — unsafe
  *   "disableAppSuggestions": "false",                        // optional, default FALSE — unsafe
+ *   "screensaver": "true",                                   // optional, default true (v3.7+)
+ *   "screensaverIdleMinutes": "10",                           // optional, default 10
  *   "wifiSsid": "FLO Secure",                                // optional
  *   "wifiPassword": "…"                                      // optional
  * }
@@ -37,6 +39,8 @@ object AdminExtras {
     const val KEY_LOCK_TASK = "dedicatedTerminal"
     const val KEY_HIDE_OTHER_APPS = "hideOtherApps"
     const val KEY_DISABLE_SUGGESTIONS = "disableAppSuggestions"
+    const val KEY_SCREENSAVER = "screensaver"
+    const val KEY_SCREENSAVER_IDLE = "screensaverIdleMinutes"
     const val KEY_WIFI_SSID = "wifiSsid"
     const val KEY_WIFI_PASSWORD = "wifiPassword"
 
@@ -82,6 +86,13 @@ object AdminExtras {
         bundle.getString(KEY_DISABLE_SUGGESTIONS)?.trim()?.let {
             cfg.disableAppSuggestions = it.equals("true", ignoreCase = true) || it == "1"
             applied += KEY_DISABLE_SUGGESTIONS
+        }
+        bundle.getString(KEY_SCREENSAVER)?.trim()?.let {
+            cfg.screensaverEnabled = it.equals("true", ignoreCase = true) || it == "1"
+            applied += KEY_SCREENSAVER
+        }
+        bundle.getString(KEY_SCREENSAVER_IDLE)?.trim()?.toIntOrNull()?.let {
+            cfg.screensaverIdleMinutes = it; applied += KEY_SCREENSAVER_IDLE
         }
         bundle.getString(KEY_WIFI_SSID)?.trim()?.takeIf { it.isNotEmpty() }?.let {
             cfg.wifiSsid = it; applied += KEY_WIFI_SSID

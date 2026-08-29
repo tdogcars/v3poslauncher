@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- The launcher makes NO network calls on its own (no downloads, no analytics, no
          telemetry). INTERNET is held solely for the technician's "Run speed test" button on
@@ -22,6 +23,18 @@
          detection) and to list installed apps in Launcher configuration. A launcher is the
          canonical legitimate holder. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <!--
+        Screen saver (Settings > Display > Screen saver) lives in Settings.Secure, which Device
+        Owner may NOT write: the DO secure-setting allowlist does not include the screensaver_*
+        keys. Declaring the permission here is what makes the one-time technician grant possible:
+            adb shell pm grant com.flo.v3poslauncher android.permission.WRITE_SECURE_SETTINGS
+        Without this line `pm grant` fails, because a package can only be granted a permission it
+        declares. The grant survives reboots (not reinstalls); ScreensaverStep re-applies itself
+        on every launcher start, so it takes effect as soon as the grant exists.
+    -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <queries>
         <intent>

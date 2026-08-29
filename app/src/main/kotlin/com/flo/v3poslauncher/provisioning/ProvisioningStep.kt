@@ -5,14 +5,24 @@ import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.config.AppConfig
 
 /** The first-run steps, in the order they run. No APK is installed by the launcher. */
-enum class StepId(val title: String) {
+enum class StepId(val title: String, val retired: Boolean = false) {
     HOME("Set as default home"),
-    HIDE_STOCK("Hide stock launcher / taskbar"),
+    HIDE_STOCK("Hide stock launcher / taskbar", retired = true),
     WIFI("Save FLO Secure Wi-Fi"),
+    SCREENSAVER("Screen saver"),
     DISPLAY("Apply display policy"),
     APPS("Verify home apps"),
     LOCK_TASK("Dedicated terminal mode"),
-    LOCKDOWN("Hide non-allowed apps (lab only)");
+    LOCKDOWN("Hide non-allowed apps (lab only)", retired = true);
+
+    companion object {
+        /**
+         * The steps a live deployment actually runs. HIDE_STOCK and LOCKDOWN were retired in
+         * v3.6.0 (hiding packages crash-looped the stock launcher); their enum entries survive
+         * so stored per-step status keys still resolve, but nothing runs or shows them.
+         */
+        fun active(): List<StepId> = values().filter { !it.retired }
+    }
 }
 
 /** Outcome of one step. WARN continues the sequence; FAIL pauses it for Retry / Skip. */

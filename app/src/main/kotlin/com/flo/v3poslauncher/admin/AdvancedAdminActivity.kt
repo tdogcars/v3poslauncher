@@ -21,6 +21,7 @@ import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.provisioning.ProvisioningLog
 import com.flo.v3poslauncher.provisioning.RevertManager
 import com.flo.v3poslauncher.provisioning.StepId
+import com.flo.v3poslauncher.provisioning.steps.DisplayPolicyStep
 import com.flo.v3poslauncher.util.Ui
 import kotlin.concurrent.thread
 
@@ -38,6 +39,7 @@ class AdvancedAdminActivity : Activity() {
     private lateinit var cfg: AppConfig
     private val main = Handler(Looper.getMainLooper())
     private lateinit var container: LinearLayout
+    private var showDiagnostics = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,15 +59,13 @@ class AdvancedAdminActivity : Activity() {
         title("Advanced device management")
         caption(DevicePolicy(this).describe())
 
-        // ---- 1. Provisioning -------------------------------------------------------------
+        // ---- Provisioning ----------------------------------------------------------------
         section("Provisioning")
         caption(stepSummary())
         button("View provisioning log") { startActivity(Intent(this, LogViewerActivity::class.java)) }
-        button("Re-run ALL provisioning steps") { rerun(StepId.values().toList()) }
-        caption("Re-run a single step:")
-        StepId.values().forEach { id -> button("• ${id.title}") { rerun(listOf(id)) } }
+        button("Re-run ALL provisioning steps") { rerun(StepId.active()) }
 
-        // ---- 1b. Dedicated terminal mode ----------------------------------------------------
+        // ---- Dedicated terminal mode -----------------------------------------------------
         section("Dedicated terminal mode (taskbar)")
         caption("Android's supported kiosk mechanism, and the reason no taskbar or suggested apps " +
             "appear. The launcher and the home apps are allowlisted; Home and Recents stay " +
@@ -79,20 +79,35 @@ class AdvancedAdminActivity : Activity() {
             ProvisioningLog.i(this, "Admin: lockTaskEnabled=${cfg.lockTaskEnabled}")
             applyLockTask(lockTaskStatus)
         }
-        button("Re-apply allowlist now") { applyLockTask(lockTaskStatus) }
 
-        // The v3.0-v3.5 "hide apps" / "hide taskbar" switches were REMOVED in v3.6.0: hiding
-        // packages the stock launcher still references crash-looped it and removed the navigation
-        // buttons. Dedicated terminal mode above does the same job the supported way. Any device
-        // that still had them on is disarmed automatically on upgrade and repairs itself on the
-        // next start.
-        section("Taskbar / app hiding")
-        caption("The old hide-apps and hide-taskbar switches were removed in v3.6.0 after they " +
-            "crash-looped the stock launcher and removed the navigation buttons on test hardware. " +
-            "Use dedicated terminal mode above. Any package an older build hid is restored " +
-            "automatically the next time this launcher starts.")
+        // ---- Screen saver ----------------------------------------------------------------
+        section("Screen saver")
+        val state = when {
+            cfg.screensaverActive -> "ON, starts after ${cfg.screensaverIdleMinutes} min idle"
+            cfg.screensaverEnabled -> "wanted, but NOT active on this device yet"
+            else -> "off"
+        }
+        caption("Stops an always-powered panel from showing the same pixels all day. " +
+            "While it is active the display is allowed to sleep; while it is not, the terminal " +
+            "keeps the historical stay-on-forever policy. Currently: $state.\n" +
+            (if (Screensaver.canWrite(this)) "Permission is granted on this device."
+            else "Needs a one-time grant over USB (Device Owner cannot grant it):\n${Screensaver.GRANT_COMMAND}"))
+        val screensaverStatus = caption("")
+        button(if (cfg.screensaverEnabled) "Screen saver is ON — turn off" else "Screen saver is OFF — turn on") {
+            cfg.screensaverEnabled = !cfg.screensaverEnabled
+            ProvisioningLog.i(this, "Admin: screensaverEnabled=${cfg.screensaverEnabled}")
+            applyScreensaver(screensaverStatus)
+        }
+        val idleField = field("Idle minutes before it starts", cfg.screensaverIdleMinutes.toString(), numeric = true)
+        button("Save idle delay and re-apply") {
+            val minutes = idleField.text.toString().trim().toIntOrNull()
+            if (minutes == null || minutes < 1 || minutes > 120) { toast("Enter 1–120 minutes"); return@button }
+            cfg.screensaverIdleMinutes = minutes
+            ProvisioningLog.i(this, "Admin: screensaverIdleMinutes=$minutes")
+            applyScreensaver(screensaverStatus)
+        }
 
-        // ---- 2. Wi-Fi --------------------------------------------------------------------
+        // ---- Wi-Fi -----------------------------------------------------------------------
         section("Install-site Wi-Fi")
         caption("The network the launcher keeps saved and re-asserts at boot.")
         val ssidField = field("SSID", cfg.wifiSsid)
@@ -108,32 +123,7 @@ class AdvancedAdminActivity : Activity() {
             toast("Saved — re-run the Wi-Fi step to apply")
         }
 
-        // ---- 3. Revert -------------------------------------------------------------------
-        section("Revert (rollback)")
-        caption("Each action is reversible. \"Undo everything\" runs them in order and finally " +
-            "releases Device Owner, after which this app can be uninstalled normally — no factory reset.")
-        val revertStatus = caption("")
-        button("1. Leave dedicated terminal mode") { runRevert(revertStatus) { RevertManager(this).clearLockTask() } }
-        button("1a. Unhide stock launcher") { runRevert(revertStatus) { RevertManager(this).unhideStockLauncher() } }
-        button("1b. Unhide non-allowed apps & suggestions") { runRevert(revertStatus) { RevertManager(this).unhideOtherApps() } }
-        button("2. Clear default-home lock") { runRevert(revertStatus) { RevertManager(this).clearPersistentHome() } }
-        button("3. Restore screen timeout") { runRevert(revertStatus) { RevertManager(this).restoreDisplayTimeout() } }
-        button("Forget install-site Wi-Fi (optional)") { runRevert(revertStatus) { RevertManager(this).forgetWifi() } }
-        button("4. Release Device Owner") {
-            confirm("Release Device Owner?",
-                "Do the unhide/clear/restore steps first, or use \"Undo everything\".") {
-                runRevert(revertStatus) { RevertManager(this).clearDeviceOwner() }
-            }
-        }
-        dangerButton("⚠ Undo everything → stock device") {
-            confirm("Undo everything?",
-                "Unhide launcher → clear home lock → restore timeout → release Device Owner. " +
-                    "The device returns to stock behavior and this app becomes uninstallable.") {
-                undoEverything(revertStatus)
-            }
-        }
-
-        // ---- 4. Security -----------------------------------------------------------------
+        // ---- Security --------------------------------------------------------------------
         section("Security")
         val newPin = field("New 4-digit PIN", "", numeric = true, password = true)
         button("Change admin PIN") {
@@ -144,8 +134,57 @@ class AdvancedAdminActivity : Activity() {
             } else toast("PIN must be exactly 4 digits")
         }
 
+        // ---- Revert ----------------------------------------------------------------------
+        section("Revert")
+        caption("Runs every rollback step in order and finally releases Device Owner, after which " +
+            "this app can be uninstalled normally — no factory reset. Individual steps live under " +
+            "Diagnostics.")
+        val revertStatus = caption("")
+        dangerButton("⚠ Undo everything → stock device") {
+            confirm("Undo everything?",
+                "Restore hidden apps → clear home lock → restore display policy → release Device " +
+                    "Owner. The device returns to stock behavior and this app becomes uninstallable.") {
+                undoEverything(revertStatus)
+            }
+        }
+
+        // ---- Diagnostics -----------------------------------------------------------------
+        section("")
+        button(if (showDiagnostics) "Hide diagnostics" else "Show diagnostics") {
+            showDiagnostics = !showDiagnostics
+            build()
+        }
+        if (showDiagnostics) diagnostics(lockTaskStatus, revertStatus)
+
         section("")
         button("Back to Launcher configuration") { finish() }
+    }
+
+    /**
+     * Field-repair tools, hidden by default. On a live terminal these are noise — most only matter
+     * when one specific step has failed, and the per-piece revert ladder is a way to leave a device
+     * half-reverted if it is tapped without understanding. Nothing here is lost, just folded away.
+     */
+    private fun diagnostics(lockTaskStatus: TextView, revertStatus: TextView) {
+        section("Diagnostics — re-run a single step")
+        StepId.active().forEach { id -> button("• ${id.title}") { rerun(listOf(id)) } }
+
+        section("Diagnostics — dedicated terminal")
+        button("Re-apply lock task allowlist now") { applyLockTask(lockTaskStatus) }
+
+        section("Diagnostics — revert one piece at a time")
+        button("Leave dedicated terminal mode") { runRevert(revertStatus) { RevertManager(this).clearLockTask() } }
+        button("Restore stock launcher (if an old build hid it)") { runRevert(revertStatus) { RevertManager(this).unhideStockLauncher() } }
+        button("Restore hidden apps and suggestions") { runRevert(revertStatus) { RevertManager(this).unhideOtherApps() } }
+        button("Clear default-home lock") { runRevert(revertStatus) { RevertManager(this).clearPersistentHome() } }
+        button("Restore display policy / screen timeout") { runRevert(revertStatus) { RevertManager(this).restoreDisplayTimeout() } }
+        button("Forget install-site Wi-Fi") { runRevert(revertStatus) { RevertManager(this).forgetWifi() } }
+        button("Release Device Owner") {
+            confirm("Release Device Owner?",
+                "Do the other revert steps first, or use \"Undo everything\".") {
+                runRevert(revertStatus) { RevertManager(this).clearDeviceOwner() }
+            }
+        }
     }
 
     // ---- actions -------------------------------------------------------------------------
@@ -162,6 +201,25 @@ class AdvancedAdminActivity : Activity() {
                     status.setTextColor(Ui.OK)
                     status.text = if (cfg.lockTaskEnabled) "Allowlist applied: $detail. Press Home on the terminal to enter." else detail
                 }.onFailure { status.setTextColor(Ui.ERR); status.text = "Failed: ${it.message}" }
+                build()
+            }
+        }
+    }
+
+    private fun applyScreensaver(status: TextView) {
+        status.setTextColor(Ui.ACCENT); status.text = "Applying…"
+        thread(name = "admin-screensaver") {
+            val outcome = runCatching {
+                val r = Screensaver.apply(this)
+                // The stay-on policy is the other half of this decision — re-apply it together,
+                // or the screen saver is configured but can never actually start.
+                val dp = DevicePolicy(this)
+                if (dp.isDeviceOwner && cfg.displayPolicyApplied) DisplayPolicyStep.apply(this, dp, cfg)
+                r
+            }
+            main.post {
+                // build() clears the status view, so the outcome goes to a toast.
+                outcome.onSuccess { toast(it.message) }.onFailure { toast("Failed: ${it.message}") }
                 build()
             }
         }
@@ -199,7 +257,7 @@ class AdvancedAdminActivity : Activity() {
     }
 
     private fun stepSummary(): String =
-        StepId.values().joinToString("\n") { "• ${it.title}: ${cfg.getStepStatus(it.name)}" }
+        StepId.active().joinToString("\n") { "• ${it.title}: ${cfg.getStepStatus(it.name)}" }
 
     // ---- tiny view DSL -------------------------------------------------------------------
 

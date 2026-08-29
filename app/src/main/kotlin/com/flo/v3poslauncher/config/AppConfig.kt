@@ -160,6 +160,30 @@ class AppConfig private constructor(context: Context) {
         get() = prefs.getBoolean(K_DISPLAY_APPLIED, false)
         set(v) = prefs.edit().putBoolean(K_DISPLAY_APPLIED, v).apply()
 
+    /**
+     * Stock Android screen saver (Settings > Display > Screen saver). Default ON: a countertop
+     * panel that is never allowed to sleep is a burn-in risk. Writing the settings themselves
+     * needs WRITE_SECURE_SETTINGS, which only an adb grant can give -- see [screensaverActive].
+     */
+    var screensaverEnabled: Boolean
+        get() = prefs.getBoolean(K_SCREENSAVER, true)
+        set(v) = prefs.edit().putBoolean(K_SCREENSAVER, v).apply()
+
+    /** Idle minutes before the screen saver starts. */
+    var screensaverIdleMinutes: Int
+        get() = prefs.getInt(K_SCREENSAVER_IDLE, 10)
+        set(v) = prefs.edit().putInt(K_SCREENSAVER_IDLE, v.coerceIn(1, 120)).apply()
+
+    /**
+     * TRUE only once the screen saver settings were VERIFIED written on this device. The display
+     * policy keys off this, not off [screensaverEnabled]: without the grant we must keep the
+     * always-on policy, or the panel would simply go black after the idle delay with no dream to
+     * show -- a terminal that looks dead to staff.
+     */
+    var screensaverActive: Boolean
+        get() = prefs.getBoolean(K_SCREENSAVER_ACTIVE, false)
+        set(v) = prefs.edit().putBoolean(K_SCREENSAVER_ACTIVE, v).apply()
+
     var persistentHomeApplied: Boolean
         get() = prefs.getBoolean(K_HOME_APPLIED, false)
         set(v) = prefs.edit().putBoolean(K_HOME_APPLIED, v).apply()
@@ -225,6 +249,9 @@ class AppConfig private constructor(context: Context) {
         private const val K_ORIG_STAY_ON = "orig_stay_on_plugged"
         private const val K_DISPLAY_APPLIED = "display_policy_applied"
         private const val K_HOME_APPLIED = "persistent_home_applied"
+        private const val K_SCREENSAVER = "screensaver_enabled"
+        private const val K_SCREENSAVER_IDLE = "screensaver_idle_minutes"
+        private const val K_SCREENSAVER_ACTIVE = "screensaver_active"
         private const val K_PROV_DONE = "provisioning_completed"
         private const val K_EXTRAS_SOURCE = "extras_source"
         private const val K_STEP_PREFIX = "step_status_"

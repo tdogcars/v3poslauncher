@@ -6,8 +6,10 @@ import android.content.Intent
 import com.flo.v3poslauncher.admin.AppLockdown
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.admin.LockTaskManager
+import com.flo.v3poslauncher.admin.Screensaver
 import com.flo.v3poslauncher.config.AppConfig
 import com.flo.v3poslauncher.provisioning.ProvisioningLog
+import com.flo.v3poslauncher.provisioning.steps.DisplayPolicyStep
 import com.flo.v3poslauncher.wifi.WifiProvisioner
 import kotlin.concurrent.thread
 
@@ -53,10 +55,14 @@ class BootReceiver : BroadcastReceiver() {
                     }
                     runCatching { AppLockdown.sync(context) }
                         .onFailure { ProvisioningLog.w(context, "BootReceiver: app lockdown re-sync failed: ${it.message}") }
+                    // Screen saver first: the display policy depends on whether it is active.
+                    // Hardcoding stay-on here (as this did before v3.7.0) silently undid the
+                    // screen saver on every boot.
+                    runCatching { ProvisioningLog.i(context, "BootReceiver: screensaver -> ${Screensaver.apply(context).message}") }
+                        .onFailure { ProvisioningLog.w(context, "BootReceiver: screensaver failed: ${it.message}") }
                     if (cfg.displayPolicyApplied) {
                         runCatching {
-                            dp.dpm.setGlobalSetting(dp.admin, android.provider.Settings.Global.STAY_ON_WHILE_PLUGGED_IN, "7")
-                            dp.dpm.setSystemSetting(dp.admin, android.provider.Settings.System.SCREEN_OFF_TIMEOUT, Int.MAX_VALUE.toString())
+                            ProvisioningLog.i(context, "BootReceiver: display -> ${DisplayPolicyStep.apply(context, dp, cfg)}")
                         }.onFailure { ProvisioningLog.w(context, "BootReceiver: display re-assert failed: ${it.message}") }
                     }
                 } else {

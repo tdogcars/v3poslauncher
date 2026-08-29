@@ -44,6 +44,11 @@ def build_provisioning_dict(a) -> dict:
         # App hiding is UNSAFE (crashes the stock launcher) — default OFF, lab use only.
         "hideOtherApps": "true" if a.hide_other_apps else "false",
         "disableAppSuggestions": "true" if a.disable_app_suggestions else "false",
+        # Stock Android screen saver. Applied by the launcher, but only once
+        # WRITE_SECURE_SETTINGS has been granted over adb -- Device Owner may not write the
+        # screensaver_* Settings.Secure keys and cannot grant itself that permission.
+        "screensaver": "false" if a.no_screensaver else "true",
+        "screensaverIdleMinutes": str(a.screensaver_idle_minutes),
     }
     if a.home_apps:
         admin_extras["homeApps"] = a.home_apps
@@ -93,12 +98,21 @@ def main() -> int:
                         "taskbar inside apps; Recents button becomes inert). Default: off")
     p.add_argument("--hide-stock-launcher", action="store_true",
                    help="ALSO hide the stock launcher package (default: off; being default HOME is enough)")
+    p.add_argument("--no-screensaver", action="store_true",
+                   help="do NOT turn on the stock Android screen saver. Default: on. Note the "
+                        "launcher can only apply it once WRITE_SECURE_SETTINGS is granted over "
+                        "adb; until then the terminal keeps the always-on display.")
+    p.add_argument("--screensaver-idle-minutes", type=int, default=10,
+                   help="idle minutes before the screen saver starts (default: 10)")
     p.add_argument("--out", default="provisioning-qr.png")
     p.add_argument("--json-out", default="provisioning.json")
     a = p.parse_args()
 
     if a.admin_pin and (len(a.admin_pin) != 4 or not a.admin_pin.isdigit()):
         print("ERROR: --admin-pin must be exactly 4 digits", file=sys.stderr)
+        return 2
+    if not 1 <= a.screensaver_idle_minutes <= 120:
+        print("ERROR: --screensaver-idle-minutes must be between 1 and 120", file=sys.stderr)
         return 2
     if not a.wifi_password:
         print("ERROR: --wifi-password is required (the device needs it to join the install-site "

@@ -11,6 +11,7 @@ import com.flo.v3poslauncher.provisioning.steps.HideStockLauncherStep
 import com.flo.v3poslauncher.provisioning.steps.HomeStep
 import com.flo.v3poslauncher.provisioning.steps.LockTaskStep
 import com.flo.v3poslauncher.provisioning.steps.LockdownStep
+import com.flo.v3poslauncher.provisioning.steps.ScreensaverStep
 import com.flo.v3poslauncher.provisioning.steps.WifiStep
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -41,7 +42,7 @@ class ProvisioningRunner(private val appContext: Context) {
         fun onRunStateChanged(state: RunState)
     }
 
-    val steps: List<StepState> = StepId.values().map { StepState(it) }
+    val steps: List<StepState> = StepId.active().map { StepState(it) }
     @Volatile var runState: RunState = RunState.IDLE
         private set
     @Volatile var complianceMode: Boolean = false
@@ -54,7 +55,8 @@ class ProvisioningRunner(private val appContext: Context) {
     private var queue: ArrayDeque<StepId> = ArrayDeque()
 
     private val implementations: Map<StepId, ProvisioningStep> = listOf(
-        HomeStep(), HideStockLauncherStep(), WifiStep(), DisplayPolicyStep(), AppsStep(), LockTaskStep(), LockdownStep(),
+        HomeStep(), HideStockLauncherStep(), WifiStep(), ScreensaverStep(), DisplayPolicyStep(),
+        AppsStep(), LockTaskStep(), LockdownStep(),
     ).associateBy { it.id }
 
     fun addListener(l: Listener) = synchronized(listeners) { listeners.add(l) }
@@ -68,7 +70,7 @@ class ProvisioningRunner(private val appContext: Context) {
             ProvisioningLog.i(appContext, "Runner: run already active (${runState}); not restarting")
             return
         }
-        start(StepId.values().toList(), compliance)
+        start(StepId.active(), compliance)
     }
 
     /** Runs an arbitrary subset (admin panel "re-run step"). Always standalone mode. */

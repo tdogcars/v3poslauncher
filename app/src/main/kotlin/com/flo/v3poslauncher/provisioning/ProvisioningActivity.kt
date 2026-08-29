@@ -73,7 +73,7 @@ class ProvisioningActivity : Activity(), ProvisioningRunner.Listener {
         when (intent.action) {
             "com.flo.v3poslauncher.ACTION_RERUN" -> {
                 val ids = intent.getStringArrayExtra("steps")?.mapNotNull { runCatching { StepId.valueOf(it) }.getOrNull() }
-                    ?: StepId.values().toList()
+                    ?: StepId.active()
                 runner.start(ids, compliance = false)
             }
             else -> runner.startAll(compliance = complianceMode)
@@ -167,7 +167,7 @@ class ProvisioningActivity : Activity(), ProvisioningRunner.Listener {
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f)
         }
         val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        StepId.values().forEach { id ->
+        StepId.active().forEach { id ->
             val row = StepRow(this)
             rows[id] = row
             list.addView(row.view)
