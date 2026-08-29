@@ -310,3 +310,19 @@ Real-world variations, not hypotheticals:
   time, so the repository can be public without leaking it. The default admin PIN (`5913`) is a
   documented, changeable default that only gates the launcher's own settings — override it per
   fleet via the QR `adminPin` or the admin panel.
+
+---
+
+## 8. Bringing up a NEW unit: staged rollout
+
+Read this before provisioning a MicroTouch you cannot afford to lose. Unit #1 was bricked by an early build and could not be recovered, because a factory reset wipes Developer options and USB debugging, and QR provisioning starts on the setup-wizard welcome screen. There is therefore no adb lifeline going INTO a QR provision. There is one available immediately after it, and taking it is the whole point of this section.
+
+Stage one, provision with lock task OFF. Set the NO_DEDICATED_TERMINAL repository variable to true and cut a tag. The generated QR then carries dedicatedTerminal=false, so the launcher does not enter lock task on first boot and Settings stays reachable. Confirm FLO Secure is up, factory reset the unit, and scan the QR from the Vercel page rather than any previously printed card.
+
+Stage two, take the lifeline before the first reboot. As soon as the launcher home screen appears, open Settings, tap About, tap the build number seven times, then turn on USB debugging under Developer options. Plug the unit into the technician machine and accept the RSA fingerprint prompt. Do not continue until adb devices reports the unit as device rather than unauthorized. Device Owner does not disable debugging here, and this session survives reboots.
+
+Stage three, verify the reboot. Reboot the unit three or four times and confirm it reaches the launcher every time. This is the failure mode that killed unit #1, and it is the one worth being patient about.
+
+Stage four, enable dedicated terminal mode. Either flip it from the Advanced admin screen on the unit, or clear the NO_DEDICATED_TERMINAL variable, cut a new tag and re-provision. Reboot again and confirm Home and Recents still work on the real MicroTouch nav bar. If the taskbar or navigation misbehaves, adb is already authorized and the unit is recoverable.
+
+A note on the CI loop. The vercel-site publish step must never put the literal skip-CI token in its commit message. GitHub treats that token on the head commit of a tag push as an instruction to skip the run, so the next tag cut from main is silently ignored and no build happens. Tags v3.6.1 and v3.6.2 were both lost this way. If a tag produces no workflow run, check the tagged commit's message first.
