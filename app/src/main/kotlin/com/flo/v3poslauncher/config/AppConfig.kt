@@ -184,6 +184,31 @@ class AppConfig private constructor(context: Context) {
         get() = prefs.getBoolean(K_SCREENSAVER_ACTIVE, false)
         set(v) = prefs.edit().putBoolean(K_SCREENSAVER_ACTIVE, v).apply()
 
+    /** Remove the curated set of pre-installed apps (see AppRemover). Off unless a QR says so. */
+    var removeBloat: Boolean
+        get() = prefs.getBoolean(K_REMOVE_BLOAT, false)
+        set(v) = prefs.edit().putBoolean(K_REMOVE_BLOAT, v).apply()
+
+    /** Hide the app-prediction service, which is where the taskbar's suggested apps come from. */
+    var disablePredictions: Boolean
+        get() = prefs.getBoolean(K_DISABLE_PREDICTIONS, false)
+        set(v) = prefs.edit().putBoolean(K_DISABLE_PREDICTIONS, v).apply()
+
+    /** Per-fleet override of AppRemover.DEFAULT_REMOVED_APPS; empty means use the built-in list. */
+    var removeAppsOverride: List<String>
+        get() = prefs.getString(K_REMOVE_APPS, "").orEmpty()
+            .split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        set(v) = prefs.edit().putString(K_REMOVE_APPS, v.joinToString(",")).apply()
+
+    /**
+     * Exactly what AppRemover hid, so revert restores precisely those. Deliberately a DIFFERENT key
+     * from AppLockdown's hiddenOtherApps: its self-heal un-hides everything it knows about whenever
+     * the retired switches are off, which would undo these on the next launch.
+     */
+    var removedPackages: Set<String>
+        get() = prefs.getStringSet(K_REMOVED_PKGS, emptySet())?.toSet() ?: emptySet()
+        set(v) = prefs.edit().putStringSet(K_REMOVED_PKGS, v).apply()
+
     var persistentHomeApplied: Boolean
         get() = prefs.getBoolean(K_HOME_APPLIED, false)
         set(v) = prefs.edit().putBoolean(K_HOME_APPLIED, v).apply()
@@ -249,6 +274,10 @@ class AppConfig private constructor(context: Context) {
         private const val K_ORIG_STAY_ON = "orig_stay_on_plugged"
         private const val K_DISPLAY_APPLIED = "display_policy_applied"
         private const val K_HOME_APPLIED = "persistent_home_applied"
+        private const val K_REMOVE_BLOAT = "remove_bloat"
+        private const val K_DISABLE_PREDICTIONS = "disable_predictions_v37"
+        private const val K_REMOVE_APPS = "remove_apps_override"
+        private const val K_REMOVED_PKGS = "removed_packages"
         private const val K_SCREENSAVER = "screensaver_enabled"
         private const val K_SCREENSAVER_IDLE = "screensaver_idle_minutes"
         private const val K_SCREENSAVER_ACTIVE = "screensaver_active"

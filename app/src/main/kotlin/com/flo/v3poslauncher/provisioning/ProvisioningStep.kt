@@ -12,6 +12,7 @@ enum class StepId(val title: String, val retired: Boolean = false) {
     SCREENSAVER("Screen saver"),
     DISPLAY("Apply display policy"),
     APPS("Verify home apps"),
+    REMOVE_APPS("Remove pre-installed apps"),
     LOCK_TASK("Dedicated terminal mode"),
     LOCKDOWN("Hide non-allowed apps (lab only)", retired = true);
 

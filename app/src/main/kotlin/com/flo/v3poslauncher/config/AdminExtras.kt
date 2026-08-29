@@ -39,6 +39,9 @@ object AdminExtras {
     const val KEY_LOCK_TASK = "dedicatedTerminal"
     const val KEY_HIDE_OTHER_APPS = "hideOtherApps"
     const val KEY_DISABLE_SUGGESTIONS = "disableAppSuggestions"
+    const val KEY_REMOVE_BLOAT = "removeBloat"
+    const val KEY_REMOVE_APPS = "removeApps"
+    const val KEY_DISABLE_PREDICTIONS = "disablePredictions"
     const val KEY_SCREENSAVER = "screensaver"
     const val KEY_SCREENSAVER_IDLE = "screensaverIdleMinutes"
     const val KEY_WIFI_SSID = "wifiSsid"
@@ -86,6 +89,18 @@ object AdminExtras {
         bundle.getString(KEY_DISABLE_SUGGESTIONS)?.trim()?.let {
             cfg.disableAppSuggestions = it.equals("true", ignoreCase = true) || it == "1"
             applied += KEY_DISABLE_SUGGESTIONS
+        }
+        bundle.getString(KEY_REMOVE_BLOAT)?.trim()?.let {
+            cfg.removeBloat = it.equals("true", ignoreCase = true) || it == "1"
+            applied += KEY_REMOVE_BLOAT
+        }
+        bundle.getString(KEY_DISABLE_PREDICTIONS)?.trim()?.let {
+            cfg.disablePredictions = it.equals("true", ignoreCase = true) || it == "1"
+            applied += KEY_DISABLE_PREDICTIONS
+        }
+        bundle.getString(KEY_REMOVE_APPS)?.trim()?.takeIf { it.isNotEmpty() }?.let { csv ->
+            val apps = csv.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+            if (apps.isNotEmpty()) { cfg.removeAppsOverride = apps; applied += KEY_REMOVE_APPS }
         }
         bundle.getString(KEY_SCREENSAVER)?.trim()?.let {
             cfg.screensaverEnabled = it.equals("true", ignoreCase = true) || it == "1"

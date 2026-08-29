@@ -112,6 +112,35 @@ class AdvancedAdminActivity : Activity() {
             applyScreensaver(screensaverStatus)
         }
 
+        // ---- Pre-installed apps ------------------------------------------------------------
+        section("Pre-installed apps")
+        caption("Removes a hand-checked list of named packages (Drive, Maps, Gmail, YouTube and " +
+            "the like) and, separately, the app-prediction service that feeds the taskbar's " +
+            "suggested apps. Launcher, Settings, SystemUI, Play Store and the camera are refused " +
+            "outright whatever the list says.\n" +
+            "Removal: ${if (cfg.removeBloat) "ON" else "off"} — suggestions: " +
+            "${if (cfg.disablePredictions) "DISABLED" else "left alone"} — " +
+            "currently removed: ${cfg.removedPackages.size}")
+        val removeStatus = caption("")
+        button(if (cfg.removeBloat) "App removal is ON — turn off" else "App removal is OFF — turn on") {
+            cfg.removeBloat = !cfg.removeBloat
+            ProvisioningLog.i(this, "Admin: removeBloat=${cfg.removeBloat}")
+            applyRemoval(removeStatus)
+        }
+        button(if (cfg.disablePredictions) "Taskbar suggestions DISABLED — re-enable" else "Disable taskbar suggested apps") {
+            cfg.disablePredictions = !cfg.disablePredictions
+            ProvisioningLog.i(this, "Admin: disablePredictions=${cfg.disablePredictions}")
+            applyRemoval(removeStatus)
+        }
+        button("Restore every removed app") {
+            confirm("Restore removed apps?", "Puts back every app this launcher hid and turns both switches off.") {
+                thread(name = "admin-restore-apps") {
+                    val r = AppRemover.restoreAll(this)
+                    main.post { toast(r.second); build() }
+                }
+            }
+        }
+
         // ---- Wi-Fi -----------------------------------------------------------------------
         section("Install-site Wi-Fi")
         caption("The network the launcher keeps saved and re-asserts at boot.")
@@ -225,6 +254,17 @@ class AdvancedAdminActivity : Activity() {
             main.post {
                 // build() clears the status view, so the outcome goes to a toast.
                 outcome.onSuccess { toast(it.message) }.onFailure { toast("Failed: ${it.message}") }
+                build()
+            }
+        }
+    }
+
+    private fun applyRemoval(status: TextView) {
+        status.setTextColor(Ui.ACCENT); status.text = "Applying…"
+        thread(name = "admin-remove-apps") {
+            val outcome = runCatching { AppRemover.apply(this) }
+            main.post {
+                outcome.onSuccess { toast(it.summary) }.onFailure { toast("Failed: ${it.message}") }
                 build()
             }
         }

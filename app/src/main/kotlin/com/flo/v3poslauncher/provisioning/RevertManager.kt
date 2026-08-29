@@ -49,6 +49,11 @@ class RevertManager(context: Context) {
         AppLockdown.unhideAll(appContext)
     }
 
+    /** Put back every app AppRemover hid. */
+    fun restoreRemovedApps(): StepOutcome = wrap("Restore removed apps") {
+        com.flo.v3poslauncher.admin.AppRemover.restoreAll(appContext)
+    }
+
     /** 2. Clear our persistent HOME preference so the stock launcher is default again. */
     fun clearPersistentHome(): StepOutcome = wrap("Clear persistent HOME") {
         if (!dp.isDeviceOwner) return@wrap false to "Not Device Owner; cannot clear HOME preference."
@@ -92,6 +97,7 @@ class RevertManager(context: Context) {
         step(clearLockTask())
         step(unhideStockLauncher())
         step(unhideOtherApps())
+        step(restoreRemovedApps())
         step(clearPersistentHome())
         step(restoreDisplayTimeout())
 

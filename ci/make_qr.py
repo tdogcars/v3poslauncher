@@ -47,11 +47,17 @@ def build_provisioning_dict(a) -> dict:
         # Stock Android screen saver. Applied by the launcher, but only once
         # WRITE_SECURE_SETTINGS has been granted over adb -- Device Owner may not write the
         # screensaver_* Settings.Secure keys and cannot grant itself that permission.
+        # Curated, explicitly named removals -- never a computed sweep. The list itself lives in
+        # the APK so the QR stays small enough to scan; removeApps overrides it per fleet.
+        "removeBloat": "false" if a.keep_preinstalled_apps else "true",
+        "disablePredictions": "false" if a.keep_app_suggestions else "true",
         "screensaver": "false" if a.no_screensaver else "true",
         "screensaverIdleMinutes": str(a.screensaver_idle_minutes),
     }
     if a.home_apps:
         admin_extras["homeApps"] = a.home_apps
+    if a.remove_apps:
+        admin_extras["removeApps"] = a.remove_apps
     if a.admin_pin:
         admin_extras["adminPin"] = a.admin_pin
     if a.wifi_ssid:
@@ -98,6 +104,15 @@ def main() -> int:
                         "taskbar inside apps; Recents button becomes inert). Default: off")
     p.add_argument("--hide-stock-launcher", action="store_true",
                    help="ALSO hide the stock launcher package (default: off; being default HOME is enough)")
+    p.add_argument("--keep-preinstalled-apps", action="store_true",
+                   help="do NOT remove the curated set of pre-installed apps (Drive, Maps, Gmail, "
+                        "YouTube and the like). Default: remove them. Launcher, Settings, SystemUI, "
+                        "Play Store and the camera are refused by the launcher regardless.")
+    p.add_argument("--remove-apps", default="",
+                   help="comma-separated override of the launcher's built-in removal list")
+    p.add_argument("--keep-app-suggestions", action="store_true",
+                   help="do NOT disable the app-prediction service. Default: disable it, which is "
+                        "what removes suggested apps from the large-screen taskbar.")
     p.add_argument("--no-screensaver", action="store_true",
                    help="do NOT turn on the stock Android screen saver. Default: on. Note the "
                         "launcher can only apply it once WRITE_SECURE_SETTINGS is granted over "

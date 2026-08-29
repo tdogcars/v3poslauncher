@@ -11,6 +11,7 @@ import com.flo.v3poslauncher.provisioning.steps.HideStockLauncherStep
 import com.flo.v3poslauncher.provisioning.steps.HomeStep
 import com.flo.v3poslauncher.provisioning.steps.LockTaskStep
 import com.flo.v3poslauncher.provisioning.steps.LockdownStep
+import com.flo.v3poslauncher.provisioning.steps.RemoveAppsStep
 import com.flo.v3poslauncher.provisioning.steps.ScreensaverStep
 import com.flo.v3poslauncher.provisioning.steps.WifiStep
 import java.util.concurrent.Executors
@@ -56,7 +57,7 @@ class ProvisioningRunner(private val appContext: Context) {
 
     private val implementations: Map<StepId, ProvisioningStep> = listOf(
         HomeStep(), HideStockLauncherStep(), WifiStep(), ScreensaverStep(), DisplayPolicyStep(),
-        AppsStep(), LockTaskStep(), LockdownStep(),
+        AppsStep(), RemoveAppsStep(), LockTaskStep(), LockdownStep(),
     ).associateBy { it.id }
 
     fun addListener(l: Listener) = synchronized(listeners) { listeners.add(l) }

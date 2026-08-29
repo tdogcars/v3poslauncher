@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.flo.v3poslauncher.admin.AppLockdown
+import com.flo.v3poslauncher.admin.AppRemover
 import com.flo.v3poslauncher.admin.DevicePolicy
 import com.flo.v3poslauncher.admin.LockTaskManager
 import com.flo.v3poslauncher.admin.Screensaver
@@ -55,6 +56,8 @@ class BootReceiver : BroadcastReceiver() {
                     }
                     runCatching { AppLockdown.sync(context) }
                         .onFailure { ProvisioningLog.w(context, "BootReceiver: app lockdown re-sync failed: ${it.message}") }
+                    runCatching { AppRemover.apply(context) }
+                        .onFailure { ProvisioningLog.w(context, "BootReceiver: app removal re-apply failed: ${it.message}") }
                     // Screen saver first: the display policy depends on whether it is active.
                     // Hardcoding stay-on here (as this did before v3.7.0) silently undid the
                     // screen saver on every boot.

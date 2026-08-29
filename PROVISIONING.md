@@ -313,6 +313,31 @@ Real-world variations, not hypotheticals:
 
 ---
 
+## 7b. Removing pre-installed apps, and the taskbar's suggested apps
+
+From v3.8.0 the QR can strip the pre-installed apps a POS terminal has no use for, and separately
+disable the app-prediction service that feeds suggested apps into the large-screen taskbar. Both run
+over Wi-Fi during provisioning; neither needs a cable.
+
+This is the same `setApplicationHidden` API that was retired in v3.6.0, and the difference is worth
+being precise about, because it is the whole safety argument. What bricked a unit was a COMPUTED
+SWEEP — hide everything not on the home list — which inevitably caught packages nobody had vetted:
+Settings, whose FallbackHome activity is where early boot lands, and Quickstep, which is also
+SystemUI's recents provider. What runs now is a hand-checked list of named packages, each confirmed
+present with a launcher icon on the target hardware. A sweep cannot be reviewed; a list can. On top
+of that the launcher refuses, whatever a QR asks for, any protected package, anything that resolves
+HOME, and anything without a launcher activity — the one exception being the prediction service,
+which has no icon and is the entire point of the second switch.
+
+The built-in list lives in AppRemover so the QR stays small enough to scan reliably; `removeApps`
+overrides it per fleet. Deliberately excluded: com.google.android.deskclock (the screen saver's
+dream lives there), com.google.android.documentsui (the system file picker, not the Files app),
+com.android.vending, com.mediatek.camera, and com.google.android.googlequicksearchbox, which feeds
+launcher search surfaces and should only be added once proven on a unit with adb attached.
+
+Everything is reversible: "Restore every removed app" in Advanced device management, and the
+"Undo everything" path restores them before releasing Device Owner.
+
 ## 8. Bringing up a NEW unit: staged rollout
 
 Read this before provisioning a MicroTouch you cannot afford to lose. Unit #1 was bricked by an early build and could not be recovered, because a factory reset wipes Developer options and USB debugging, and QR provisioning starts on the setup-wizard welcome screen. There is therefore no adb lifeline going INTO a QR provision. There is one available immediately after it, and taking it is the whole point of this section.
