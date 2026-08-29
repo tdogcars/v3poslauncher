@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -48,6 +49,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import com.flo.v3poslauncher.R
+import com.flo.v3poslauncher.admin.Screensaver
+import com.flo.v3poslauncher.config.AppConfig
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -160,6 +164,14 @@ fun HomeScreen(config: LauncherConfig, onOpenSettings: () -> Unit) {
             SpeedTestInline(modifier = Modifier.padding(start = 14.dp, top = 2.dp))
         }
 
+        ScreensaverWarning(
+            refreshKey = refresh,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .systemBarsPadding()
+                .padding(16.dp),
+        )
+
         when (val state = lookup) {
             HomeApps.Loading -> Unit // stays pure black while resolving
 
@@ -193,6 +205,82 @@ fun HomeScreen(config: LauncherConfig, onOpenSettings: () -> Unit) {
  * locale and 12/24-hour setting. Not clickable: touches over it fall through
  * to the hold-to-configure background layer.
  */
+/**
+ * Advisory at the foot of the home screen when the screen saver was asked for but is not actually
+ * running on this terminal. Same intent as the default-launcher prompt, minus the blocking: that
+ * one replaces the whole screen, which a POS terminal cannot afford, so this never covers a tile.
+ *
+ * It shows in exactly one state — wanted, not active — so it is silent both on a finished terminal
+ * and on a fleet that does not want a screen saver. Deliberately not dismissible: the two ways to
+ * clear it are to finish the one-time grant or to switch the screen saver off in Advanced device
+ * management, and a warning you can wave away is one nobody ever acts on. It re-checks every few
+ * seconds, so it disappears on its own moments after the grant lands, with nothing to tap.
+ */
+@Composable
+private fun ScreensaverWarning(refreshKey: Int, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var expanded by remember { mutableStateOf(false) }
+    val needed by produceState(initialValue = false, refreshKey) {
+        while (true) {
+            val cfg = AppConfig.get(context)
+            value = cfg.screensaverEnabled && !cfg.screensaverActive
+            delay(3000)
+        }
+    }
+    if (!needed) return
+
+    Column(
+        modifier = modifier
+            .widthIn(max = 720.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF3A2E10))
+            .clickable { expanded = !expanded }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Screen saver is not active on this terminal",
+            color = Color(0xFFE8B93B),
+            fontSize = 13.sp,
+            textAlign = TextAlign.Center,
+        )
+        if (!expanded) {
+            Text(
+                text = "Tap for the one-time setup command",
+                color = Color(0xFFB59B62),
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+            )
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Android only allows this to be switched on over USB. With the terminal " +
+                    "connected to a technician machine, run:",
+                color = Color(0xFFB59B62),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = Screensaver.GRANT_COMMAND,
+                color = Color(0xFFE8B93B),
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "This notice clears itself a few seconds after the grant. If this fleet " +
+                    "does not want a screen saver, switch it off in Advanced device management " +
+                    "and the notice stops for good.",
+                color = Color(0xFFB59B62),
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
+}
+
 @Composable
 private fun ClockDisplay(refreshKey: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current

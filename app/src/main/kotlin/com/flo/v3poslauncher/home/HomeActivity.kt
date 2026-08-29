@@ -74,13 +74,17 @@ class HomeActivity : ComponentActivity() {
      */
     private fun selfHeal() {
         AppLockdown.syncAsync(this)
-        // Picks up a WRITE_SECURE_SETTINGS grant made after provisioning, with no return visit.
-        Screensaver.reapplyAsync(this)
     }
 
     override fun onResume() {
         super.onResume()
         enterLockTaskIfConfigured()
+        // Picks up a WRITE_SECURE_SETTINGS grant made after provisioning, with no return visit:
+        // pressing HOME is enough. This activity is singleTask, so onCreate does NOT run again on
+        // a HOME press -- doing this only in onCreate would leave the grant unnoticed until the
+        // process restarted. [Screensaver.reapplyAsync] costs a permission check when there is
+        // nothing to do.
+        Screensaver.reapplyAsync(this)
     }
 
     /**

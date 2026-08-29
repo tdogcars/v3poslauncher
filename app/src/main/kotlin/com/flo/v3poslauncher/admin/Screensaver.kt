@@ -117,8 +117,10 @@ object Screensaver {
             runCatching {
                 val cfg = AppConfig.get(app)
                 val before = cfg.screensaverActive
-                if (!cfg.screensaverEnabled && !before) return@runCatching
-                if (before && !canWrite(app)) return@runCatching
+                val wanted = cfg.screensaverEnabled
+                // Steady state on both sides -- nothing to write. Checked first so calling this on
+                // every resume costs a SharedPreferences read and a permission check.
+                if (wanted == before && (!wanted || canWrite(app))) return@runCatching
                 val result = apply(app)
                 if (result.applied != before) {
                     ProvisioningLog.i(app, "Screensaver: ${result.message}")
