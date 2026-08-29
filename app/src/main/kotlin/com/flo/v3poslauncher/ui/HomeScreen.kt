@@ -51,7 +51,6 @@ import androidx.compose.ui.res.stringResource
 import com.flo.v3poslauncher.R
 import com.flo.v3poslauncher.admin.Screensaver
 import com.flo.v3poslauncher.config.AppConfig
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -206,78 +205,53 @@ fun HomeScreen(config: LauncherConfig, onOpenSettings: () -> Unit) {
  * to the hold-to-configure background layer.
  */
 /**
- * Advisory at the foot of the home screen when the screen saver was asked for but is not actually
- * running on this terminal. Same intent as the default-launcher prompt, minus the blocking: that
- * one replaces the whole screen, which a POS terminal cannot afford, so this never covers a tile.
+ * Advisory at the foot of the home screen when the screen saver is wanted but switched off on this
+ * terminal. Same intent as the default-launcher prompt, minus the blocking: that one replaces the
+ * whole screen, which a POS terminal cannot afford, so this never covers a tile.
  *
- * It shows in exactly one state — wanted, not active — so it is silent both on a finished terminal
- * and on a fleet that does not want a screen saver. Deliberately not dismissible: the two ways to
- * clear it are to finish the one-time grant or to switch the screen saver off in Advanced device
- * management, and a warning you can wave away is one nobody ever acts on. It re-checks every few
- * seconds, so it disappears on its own moments after the grant lands, with nothing to tap.
+ * Tapping it opens Android's own screen saver page, where anyone can switch it on in two taps —
+ * no adb, no technician. The state it reports comes from Settings.Secure directly rather than from
+ * anything the launcher recorded, because reading that namespace needs no permission while writing
+ * it does. So the notice reflects the real device, and switching the screen saver on by hand makes
+ * it disappear on its own within a couple of seconds of coming back.
+ *
+ * Not dismissible by design: the two ways to clear it — switch the screen saver on, or switch it
+ * off in Advanced device management if this fleet does not want one — are both one action away,
+ * and a warning you can wave away is one nobody acts on.
  */
 @Composable
 private fun ScreensaverWarning(refreshKey: Int, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var expanded by remember { mutableStateOf(false) }
     val needed by produceState(initialValue = false, refreshKey) {
         while (true) {
-            val cfg = AppConfig.get(context)
-            value = cfg.screensaverEnabled && !cfg.screensaverActive
-            delay(3000)
+            value = AppConfig.get(context).screensaverEnabled && !Screensaver.isOnDevice(context)
+            delay(2000)
         }
     }
     if (!needed) return
 
     Column(
         modifier = modifier
-            .widthIn(max = 720.dp)
+            .widthIn(max = 560.dp)
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF3A2E10))
-            .clickable { expanded = !expanded }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .clickable { Screensaver.openSettings(context) }
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "Screen saver is not active on this terminal",
+            text = "Screen saver is off on this terminal",
             color = Color(0xFFE8B93B),
-            fontSize = 13.sp,
+            fontSize = 14.sp,
             textAlign = TextAlign.Center,
         )
-        if (!expanded) {
-            Text(
-                text = "Tap for the one-time setup command",
-                color = Color(0xFFB59B62),
-                fontSize = 11.sp,
-                textAlign = TextAlign.Center,
-            )
-        } else {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Android only allows this to be switched on over USB. With the terminal " +
-                    "connected to a technician machine, run:",
-                color = Color(0xFFB59B62),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = Screensaver.GRANT_COMMAND,
-                color = Color(0xFFE8B93B),
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "This notice clears itself a few seconds after the grant. If this fleet " +
-                    "does not want a screen saver, switch it off in Advanced device management " +
-                    "and the notice stops for good.",
-                color = Color(0xFFB59B62),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = "Tap to open Android's screen saver settings",
+            color = Color(0xFFB59B62),
+            fontSize = 12.sp,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

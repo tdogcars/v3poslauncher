@@ -82,16 +82,20 @@ class AdvancedAdminActivity : Activity() {
 
         // ---- Screen saver ----------------------------------------------------------------
         section("Screen saver")
+        val onDevice = Screensaver.isOnDevice(this)
         val state = when {
-            cfg.screensaverActive -> "ON, starts after ${cfg.screensaverIdleMinutes} min idle"
-            cfg.screensaverEnabled -> "wanted, but NOT active on this device yet"
-            else -> "off"
+            onDevice -> "ON, starts after ${cfg.screensaverIdleMinutes} min idle"
+            cfg.screensaverEnabled -> "wanted, but switched OFF on this terminal"
+            else -> "off (not wanted)"
         }
         caption("Stops an always-powered panel from showing the same pixels all day. " +
-            "While it is active the display is allowed to sleep; while it is not, the terminal " +
-            "keeps the historical stay-on-forever policy. Currently: $state.\n" +
-            (if (Screensaver.canWrite(this)) "Permission is granted on this device."
-            else "Needs a one-time grant over USB (Device Owner cannot grant it):\n${Screensaver.GRANT_COMMAND}"))
+            "While it is on, the display is allowed to sleep; while it is not, the terminal keeps " +
+            "the stay-on-forever policy — which is why a dream never starts on a plugged-in " +
+            "terminal until this is on.\nCurrently: $state.\n" + Screensaver.describeDevice(this) + "\n" +
+            (if (Screensaver.canWrite(this)) "The launcher can set this itself on this device."
+            else "The launcher cannot switch it on by itself — use the button below, or grant it " +
+                "once over USB to make it automatic:\n${Screensaver.GRANT_COMMAND}"))
+        button("Open Android screen saver settings") { Screensaver.openSettings(this) }
         val screensaverStatus = caption("")
         button(if (cfg.screensaverEnabled) "Screen saver is ON — turn off" else "Screen saver is OFF — turn on") {
             cfg.screensaverEnabled = !cfg.screensaverEnabled

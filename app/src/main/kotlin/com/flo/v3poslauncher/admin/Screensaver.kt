@@ -40,6 +40,45 @@ object Screensaver {
 
     data class Result(val applied: Boolean, val message: String)
 
+    /**
+     * The device's real answer, straight from Settings.Secure. Reading that namespace needs no
+     * permission at all — only writing does — so this is always available and is the truth even
+     * when the launcher itself could not set it. This is what the home-screen notice keys off, so
+     * a screen saver switched on by hand in Android settings clears the notice by itself.
+     */
+    fun isOnDevice(context: Context): Boolean = runCatching {
+        Settings.Secure.getInt(context.contentResolver, ENABLED, 0) == 1
+    }.getOrDefault(false)
+
+    /** Android's own screen saver page, with fallbacks for skins that do not expose it directly. */
+    fun openSettings(context: Context) {
+        val actions = listOf(
+            Settings.ACTION_DREAM_SETTINGS,
+            Settings.ACTION_DISPLAY_SETTINGS,
+            Settings.ACTION_SETTINGS,
+        )
+        for (action in actions) {
+            val opened = runCatching {
+                context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }.isSuccess
+            if (opened) return
+        }
+        ProvisioningLog.w(context, "Screensaver: no screen saver settings screen could be opened")
+    }
+
+    /**
+     * The raw device state. Worth showing on the admin screen: if the toggle reads on but the panel
+     * never dreams, the answer is almost always in here — no component chosen, or both trigger keys
+     * zero so there is no condition under which it would ever start.
+     */
+    fun describeDevice(context: Context): String {
+        val cr = context.contentResolver
+        fun key(name: String) = runCatching { Settings.Secure.getInt(cr, name, -1) }.getOrDefault(-1)
+        val component = runCatching { Settings.Secure.getString(cr, COMPONENTS) }.getOrNull()
+        return "device: enabled=${key(ENABLED)} whileCharging=${key(ON_SLEEP)} " +
+            "whileDocked=${key(ON_DOCK)} dream=${component ?: "(none chosen)"}"
+    }
+
     fun canWrite(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
             PackageManager.PERMISSION_GRANTED
@@ -77,12 +116,19 @@ object Screensaver {
         }
 
         if (!canWrite(context)) {
-            cfg.screensaverActive = false
-            return Result(
-                false,
-                "Screen saver settings are not writable by this app yet. Device Owner cannot grant " +
-                    "this permission to itself. Run once with the terminal on USB: $GRANT_COMMAND",
-            )
+            // We cannot switch it on ourselves, but a person can, in two taps. Trust the device.
+            val onDevice = isOnDevice(context)
+            cfg.screensaverActive = onDevice
+            return if (onDevice) {
+                Result(true, "Screen saver is on (switched on in Android settings).")
+            } else {
+                Result(
+                    false,
+                    "Screen saver is off. Turn it on in Settings > Display > Screen saver — the " +
+                        "home screen has a shortcut. To have the launcher set it with no visit at " +
+                        "all, grant it once over USB: $GRANT_COMMAND",
+                )
+            }
         }
 
         return try {
